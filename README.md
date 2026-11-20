@@ -1,6 +1,6 @@
 # GPverse — Mare Alto
 
-**Versione: V0.0.2** — concept, ancora niente di giocabile.
+**Versione: V0.1.0** — primo prototipo giocabile.
 
 Mare Alto è un survival open world senza storia prefissata. Scegli un sopravvissuto in un'Italia sommersa e ridisegnata, 400 anni nel futuro, e fai quello che vuoi: navigare, commerciare, esplorare le città sommerse, fondare un villaggio o comandare una flotta.
 
@@ -14,6 +14,43 @@ Mare Alto è un survival open world senza storia prefissata. Scegli un sopravvis
 - Le fazioni sono Bruciatori, Signori delle Terre Alte, Flottiglie, Palombari e Figli dell'Onda.
 
 Il documento di design completo è su Claude: *GPverse — Mare Alto · Game Design Document*.
+
+## Come giocare
+
+Il gioco gira nel browser, su PC e su telefono. Dalla cartella del repo avvia un piccolo server:
+
+```
+python3 -m http.server 8000
+```
+
+Poi apri `http://localhost:8000`. Su Windows usa `py -m http.server 8000`. Aprire direttamente `index.html` col doppio clic non basta, perché il browser blocca il caricamento delle immagini.
+
+| Comando | Tastiera | Telefono |
+| --- | --- | --- |
+| Muoversi | WASD o frecce | Joystick a sinistra |
+| Azione: raccogliere, bere, cucinare, salire sulla zattera, pescare | E | AZIONE |
+| Colpire | Spazio o clic | COLPISCI |
+| Usare un oggetto | 1–9 | Tocca l'oggetto in basso |
+
+## Cosa c'è nella V0.1.0
+
+- Un arcipelago generato da un seme: l'Atollo del Campanile, tre isole più piccole e tre banchi sommersi con le rovine.
+- Sete, fame e salute. Il caldo di mezzogiorno fa venire più sete.
+- Ciclo giorno/notte di 4 minuti. Di notte i granchi sono di più e più aggressivi.
+- Raccoglitore di acqua piovana, palme da cocco, casse e barili da frugare, legna portata dal mare.
+- Pesca dall'acqua bassa o dalla zattera (in acqua profonda si pesca più in fretta).
+- Cottura al falò: 1 legna per ogni pasto. Mangiare crudo può farti stare male.
+- Granchi giganti da combattere. Il coltello, se lo trovi, raddoppia il danno.
+- Zattera per navigare anche in mare aperto.
+
+## Struttura
+
+- `index.html`: punto di partenza del gioco.
+- `src/mondo.js`: generazione del terreno e delle isole.
+- `src/gioco.js`: scene, giocatore, granchi, interfaccia.
+- `assets/raw/`: i fogli originali generati con Arena AI.
+- `assets/sprites/` e `assets/tiles/`: sprite e terreni pronti per il gioco, creati da `scripts/processa_asset.py`.
+- `vendor/phaser.min.js`: motore Phaser 3.90.
 
 ## Stile grafico
 
