@@ -13,7 +13,7 @@ Mare Alto è un survival open world senza storia prefissata. Scegli un sopravvis
 - Tono alla Mad Max: il carburante è potere, i mezzi sono di recupero e l'economia è di baratto.
 - Le fazioni sono Bruciatori, Signori delle Terre Alte, Flottiglie, Palombari e Figli dell'Onda.
 
-Il documento di design completo è su Claude: *GPverse — Mare Alto · Game Design Document*.
+Il documento di design completo è su Claude: *GPverse — Mare Alto · Game Design Document*. La versione giocabile è pubblicata come artifact Claude.
 
 ## Come giocare
 
@@ -50,7 +50,7 @@ Poi apri `http://localhost:8000`. Su Windows usa `py -m http.server 8000`. Aprir
 - `src/gioco.js`: scene, giocatore, granchi, interfaccia.
 - `assets/raw/`: i fogli originali generati con Arena AI.
 - `assets/sprites/` e `assets/tiles/`: sprite e terreni pronti per il gioco, creati da `scripts/processa_asset.py`.
-- `vendor/phaser.min.js`: motore Phaser 3.90.
+- `vendor/phaser.min.js`: motore Phaser 3.90, usato se il CDN non è raggiungibile (per esempio offline).
 
 ## Stile grafico
 
