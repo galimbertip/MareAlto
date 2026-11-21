@@ -1,7 +1,7 @@
 // GPverse — Mare Alto · prototipo giocabile
 'use strict';
 
-const VERSIONE = 'V0.1.0';
+const VERSIONE = 'V0.2.0';
 const DURATA_GIORNO = 240; // secondi per un giorno completo
 
 const OGGETTI = {
@@ -18,6 +18,15 @@ const OGGETTI = {
 };
 const ORDINE_INV = ['acqua', 'cocco', 'cibo', 'pesce', 'carne', 'benda', 'legna', 'rottame', 'corda', 'coltello'];
 
+// Cosa si puo' costruire e quanto costa
+const RICETTE = [
+  { id: 'falo', nome: 'Falò', costo: { legna: 3 }, cosa: 'Cucina pesce e granchio' },
+  { id: 'raccoglitore', nome: 'Raccoglitore di pioggia', costo: { rottame: 2, corda: 1 }, cosa: 'Raccoglie acqua da bere' },
+  { id: 'coltello', nome: 'Coltello', costo: { rottame: 1, legna: 1 }, cosa: 'Colpi doppi ai granchi', oggetto: true },
+  { id: 'baracca', nome: 'Baracca', costo: { rottame: 5, legna: 4, corda: 2 }, cosa: "Dormi al sicuro fino all'alba" },
+  { id: 'zattera', nome: 'Zattera', costo: { legna: 8, corda: 4, rottame: 3 }, cosa: 'Naviga verso le altre isole' },
+];
+
 const SPRITE = ['sopr_giu', 'sopr_su', 'sopr_sx', 'sopr_dx', 'baracca', 'zattera', 'falo', 'raccoglitore',
   'cassa', 'barile', 'rottami', 'pneumatico', 'legna', 'corda', 'ossa', 'rete',
   'roccia_grande', 'roccia', 'erba', 'cespuglio', 'albero_morto', 'palma', 'alghe', 'corallo',
@@ -27,6 +36,8 @@ const SPRITE = ['sopr_giu', 'sopr_su', 'sopr_sx', 'sopr_dx', 'baracca', 'zattera
   'ic_coltello', 'ic_tanica', 'ic_benda', 'ic_sole'];
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const FONT = 'monospace';
+const costoTesto = (c) => Object.entries(c).map(([k, n]) => `${n} ${OGGETTI[k].nome.toLowerCase()}`).join(', ');
 
 // ---------------------------------------------------------------- Caricamento
 class Avvio extends Phaser.Scene {
@@ -34,7 +45,7 @@ class Avvio extends Phaser.Scene {
   preload() {
     const w = this.scale.width, h = this.scale.height;
     const barra = this.add.rectangle(w / 2 - 150, h / 2, 0, 8, 0x4fb3e8).setOrigin(0, 0.5);
-    this.add.text(w / 2, h / 2 - 30, 'Mare Alto', { fontFamily: 'monospace', fontSize: '22px', color: '#e8d9b0' }).setOrigin(0.5);
+    this.add.text(w / 2, h / 2 - 30, 'Mare Alto', { fontFamily: FONT, fontSize: '22px', color: '#e8d9b0' }).setOrigin(0.5);
     this.load.on('progress', (p) => { barra.width = 300 * p; });
     for (const s of SPRITE) this.load.image(s, `assets/sprites/${s}.png`);
     for (const t of ['sabbia', 'basso', 'profondo', 'roccia']) this.load.image('t_' + t, `assets/tiles/${t}.png`);
@@ -54,42 +65,147 @@ class Titolo extends Phaser.Scene {
       img.setScale(Math.max(w / img.width, h / img.height));
       this.add.rectangle(0, 0, w, h, 0x061018, 0.55).setOrigin(0);
       const piccolo = w < 600;
-      this.add.text(w / 2, h * 0.24, 'GPverse', { fontFamily: 'monospace', fontSize: piccolo ? '16px' : '22px', color: '#4fb3e8' }).setOrigin(0.5);
-      this.add.text(w / 2, h * 0.24 + (piccolo ? 34 : 50), 'MARE ALTO', {
-        fontFamily: 'monospace', fontSize: piccolo ? '40px' : '72px', color: '#f0e2b6', stroke: '#2a1408', strokeThickness: 8,
+      this.add.text(w / 2, h * 0.22, 'GPverse', { fontFamily: FONT, fontSize: piccolo ? '16px' : '22px', color: '#4fb3e8' }).setOrigin(0.5);
+      this.add.text(w / 2, h * 0.22 + (piccolo ? 34 : 50), 'MARE ALTO', {
+        fontFamily: FONT, fontSize: piccolo ? '40px' : '72px', color: '#f0e2b6', stroke: '#2a1408', strokeThickness: 8,
       }).setOrigin(0.5);
-      this.add.text(w / 2, h * 0.24 + (piccolo ? 72 : 110), VERSIONE, { fontFamily: 'monospace', fontSize: '16px', color: '#e8a24f' }).setOrigin(0.5);
+      this.add.text(w / 2, h * 0.22 + (piccolo ? 72 : 110), VERSIONE, { fontFamily: FONT, fontSize: '16px', color: '#e8a24f' }).setOrigin(0.5);
       const touch = this.sys.game.device.input.touch;
       const comandi = touch
-        ? 'Joystick a sinistra per muoverti\nAZIONE: raccogli, bevi, cucina, sali sulla zattera, pesca\nCOLPISCI: attacca i granchi\nTocca un oggetto in basso per usarlo'
-        : 'WASD / frecce: muoviti\nE: raccogli, bevi, cucina, sali sulla zattera, pesca\nSPAZIO o clic: colpisci\n1-9: usa un oggetto dell\'inventario';
-      this.add.text(w / 2, h * 0.62, comandi, {
-        fontFamily: 'monospace', fontSize: piccolo ? '12px' : '15px', color: '#d8e6ea', align: 'center', lineSpacing: 6,
+        ? 'Joystick a sinistra per muoverti\nAZIONE: raccogli, fruga, bevi, cucina, pesca\nCOLPISCI: attacca i granchi\nCOSTRUISCI: falò, raccoglitore, baracca, zattera\nTocca un oggetto in basso per usarlo'
+        : 'WASD / frecce: muoviti\nE: raccogli, fruga, bevi, cucina, pesca\nSPAZIO o clic: colpisci\nC: costruisci\n1-9: usa un oggetto dell\'inventario';
+      this.add.text(w / 2, h * 0.61, comandi, {
+        fontFamily: FONT, fontSize: piccolo ? '12px' : '15px', color: '#d8e6ea', align: 'center', lineSpacing: 6,
       }).setOrigin(0.5);
-      const invito = this.add.text(w / 2, h * 0.86, touch ? 'Tocca per iniziare' : 'Premi INVIO o clicca per iniziare', {
-        fontFamily: 'monospace', fontSize: piccolo ? '16px' : '20px', color: '#ffffff',
+      const invito = this.add.text(w / 2, h * 0.87, touch ? 'Tocca per iniziare' : 'Premi INVIO o clicca per iniziare', {
+        fontFamily: FONT, fontSize: piccolo ? '16px' : '20px', color: '#ffffff',
       }).setOrigin(0.5);
       this.tweens.add({ targets: invito, alpha: 0.3, yoyo: true, repeat: -1, duration: 700 });
     };
     disegna();
     this.scale.on('resize', disegna, this);
     this.events.once('shutdown', () => this.scale.off('resize', disegna, this));
-    const parti = () => { this.scene.start('Gioco'); };
+    const parti = () => { this.scene.start('Naufragio'); };
     this.input.keyboard.once('keydown-ENTER', parti);
     this.input.once('pointerdown', parti);
+  }
+}
+
+// ---------------------------------------------------------------- Naufragio (animazione iniziale)
+class Naufragio extends Phaser.Scene {
+  constructor() { super('Naufragio'); }
+  create() {
+    const w = this.scale.width, h = this.scale.height;
+    const cx = w / 2, cy = h * 0.52;
+    this.finito = false;
+    this.cameras.main.setBackgroundColor('#04121c');
+
+    // mare in tempesta
+    this.mare = this.add.tileSprite(0, 0, w, h, 't_profondo').setOrigin(0).setTint(0x3a5a78);
+    this.onde = this.add.graphics();
+    this.zattera = this.add.image(cx, cy, 'zattera').setScale(1.4);
+    this.uomo = this.add.image(cx + 60, cy - 8, 'sopr_giu').setOrigin(0.5, 1).setScale(1.4);
+    this.pezzi = ['cassa', 'barile', 'legna', 'corda', 'rottami', 'barile'].map((k) => this.add.image(cx, cy, k).setScale(1.3).setVisible(false));
+    this.pioggia = this.add.graphics();
+    this.lampo = this.add.rectangle(0, 0, w, h, 0xffffff, 0).setOrigin(0);
+    this.buio = this.add.rectangle(0, 0, w, h, 0x000000, 1).setOrigin(0);
+    this.testo = this.add.text(cx, h * 0.14, '', {
+      fontFamily: FONT, fontSize: w < 600 ? '15px' : '20px', color: '#f0e2b6', align: 'center',
+      stroke: '#000000', strokeThickness: 4, wordWrap: { width: Math.min(w - 40, 760) },
+    }).setOrigin(0.5);
+    const salta = this.add.text(w - 16, h - 16, 'Salta ▶', {
+      fontFamily: FONT, fontSize: '15px', color: '#ffffff', backgroundColor: '#00000088', padding: { x: 10, y: 6 },
+    }).setOrigin(1, 1).setInteractive();
+    salta.on('pointerdown', () => this.fine());
+    this.input.keyboard.once('keydown-ENTER', () => this.fine());
+    this.input.keyboard.once('keydown-ESC', () => this.fine());
+
+    this.tweens.add({ targets: this.buio, alpha: 0, duration: 1500 });
+    this.dondola = this.tweens.add({ targets: [this.zattera, this.uomo], angle: { from: -9, to: 9 }, y: '+=10', yoyo: true, repeat: -1, duration: 900, ease: 'Sine.inOut' });
+
+    const passi = [
+      [300, () => this.scrivi('Anno 2426. Da quattro secoli il mare copre l\'Italia.')],
+      [4200, () => this.scrivi('Recuperavi rottami tra le rovine sommerse, finché non è arrivata la tempesta.')],
+      [7600, () => this.fulmine()],
+      [8800, () => this.fulmine()],
+      [9400, () => this.rottura()],
+      [10400, () => this.scrivi('L\'onda ha spezzato la zattera. Hai perso tutto.')],
+      [13800, () => this.scrivi('Poi, il buio.')],
+      [15200, () => this.tweens.add({ targets: this.buio, alpha: 1, duration: 1600 })],
+      [17200, () => this.fine()],
+    ];
+    for (const [t, f] of passi) this.time.delayedCall(t, f);
+  }
+
+  scrivi(t) {
+    this.testo.setText('').setAlpha(1);
+    let i = 0;
+    this.time.addEvent({ delay: 35, repeat: t.length - 1, callback: () => { this.testo.setText(t.slice(0, ++i)); } });
+  }
+
+  fulmine() {
+    this.lampo.setAlpha(0.85);
+    this.tweens.add({ targets: this.lampo, alpha: 0, duration: 350 });
+    this.cameras.main.shake(300, 0.012);
+  }
+
+  rottura() {
+    this.fulmine();
+    this.dondola.stop();
+    const z = this.zattera;
+    this.tweens.add({ targets: z, angle: 35, alpha: 0, scaleY: 0.4, y: z.y + 50, duration: 1800, ease: 'Quad.in' });
+    this.pezzi.forEach((p, i) => {
+      const a = (i / this.pezzi.length) * Math.PI * 2;
+      p.setPosition(z.x, z.y).setVisible(true);
+      this.tweens.add({ targets: p, x: z.x + Math.cos(a) * 220, y: z.y + Math.sin(a) * 140, angle: 200 * (i % 2 ? 1 : -1), duration: 1400, ease: 'Quad.out' });
+      this.tweens.add({ targets: p, y: '+=8', yoyo: true, repeat: -1, duration: 700, delay: 1400 });
+    });
+    // il sopravvissuto cade in acqua e viene trascinato via
+    const u = this.uomo;
+    this.tweens.add({ targets: u, x: u.x - 160, y: u.y + 120, angle: -20, duration: 1600, ease: 'Quad.out',
+      onComplete: () => {
+        u.setCrop(0, 0, u.width, u.height * 0.45);
+        this.tweens.add({ targets: u, x: '-=400', y: '+=40', duration: 6000 });
+      } });
+  }
+
+  update(t, dt) {
+    if (!this.mare) return;
+    const w = this.scale.width, h = this.scale.height;
+    this.mare.tilePositionX += dt * 0.08;
+    this.mare.tilePositionY -= dt * 0.03;
+    // pioggia obliqua
+    this.pioggia.clear().lineStyle(1, 0xbfd8e8, 0.45);
+    for (let i = 0; i < 140; i++) {
+      const x = ((i * 97 + t * 0.9) % (w + 200)) - 100, y = ((i * 53 + t * 1.6) % (h + 100)) - 50;
+      this.pioggia.lineBetween(x, y, x - 10, y + 22);
+    }
+    // creste delle onde
+    this.onde.clear().lineStyle(2, 0xd8f0ff, 0.35);
+    for (let r = 0; r < 9; r++) {
+      const y = (r * 97 + t * 0.04) % h;
+      const x = ((r * 211 + t * 0.12) % (w + 300)) - 150;
+      this.onde.lineBetween(x, y, x + 60 + r * 4, y - 4);
+    }
+  }
+
+  fine() {
+    if (this.finito) return;
+    this.finito = true;
+    this.scene.start('Gioco', { intro: true });
   }
 }
 
 // ---------------------------------------------------------------- Gioco
 class Gioco extends Phaser.Scene {
   constructor() { super('Gioco'); }
+  init(dati) { this.intro = !!(dati && dati.intro); }
 
   create() {
     this.rng = rngConSeme(20261120);
     this.mondo = new Mondo(20261120);
     const M = this.mondo;
 
-    // terreno disegnato una volta su un canvas
     if (!this.textures.exists('terreno')) {
       const tex = this.textures.createCanvas('terreno', M.L, M.A);
       const img = {};
@@ -99,31 +215,43 @@ class Gioco extends Phaser.Scene {
     }
     this.add.image(0, 0, 'terreno').setOrigin(0).setDepth(-10);
 
-    this.ostacoli = [];   // cerchi {x, y, r} che bloccano il passaggio
-    this.interattivi = []; // oggetti con cui premere E
+    this.ostacoli = [];
+    this.interattivi = [];
     this.granchi = [];
+    this.zattera = null;
+    this.menuAperto = false;
+    this.consigliDati = new Set();
 
     this.stato = {
-      sete: 100, fame: 100, salute: 100,
-      giorno: 1, ora: 0.08, // 0 = alba
-      inv: { acqua: 1, cocco: 1 },
+      sete: 85, fame: 75, salute: 80,
+      giorno: 1, ora: 0.03,
+      inv: {},
       morto: false,
       messaggi: [],
     };
 
+    // punto di approdo: la spiaggia a sud dell'atollo
+    const atollo = M.isole[0];
+    let approdo = { x: atollo.x, y: atollo.y };
+    for (let y = atollo.y; y < atollo.y + 600; y += 4) {
+      if (M.campo(atollo.x, y) < 0.18) { approdo = { x: atollo.x, y: y - 6 }; break; }
+    }
+    this.approdo = approdo;
     this.piazzaMondo();
 
-    // giocatore
-    const inizio = this.cercaTerra(1520, 1260, 0.3);
+    const inizio = this.cercaTerra(approdo.x, approdo.y);
     this.giocatore = this.add.image(inizio.x, inizio.y, 'sopr_giu').setOrigin(0.5, 1);
     this.ombra = this.add.ellipse(inizio.x, inizio.y, 26, 9, 0x000000, 0.25);
+    this.increspatura = this.add.ellipse(inizio.x, inizio.y, 40, 14).setStrokeStyle(2, 0xffffff, 0.5).setVisible(false);
+    this.tweens.add({ targets: this.increspatura, scaleX: 1.25, scaleY: 1.25, alpha: 0.3, yoyo: true, repeat: -1, duration: 600 });
     this.dir = 'giu';
     this.passo = 0;
     this.suZattera = false;
     this.pesca = null;
     this.ultimoColpo = 0;
+    this.bloccato = false;
+    this.avvisoLargo = 0;
 
-    // camera
     const cam = this.cameras.main;
     cam.setBounds(0, 0, M.L, M.A);
     cam.startFollow(this.giocatore, true, 0.12, 0.12);
@@ -132,28 +260,65 @@ class Gioco extends Phaser.Scene {
     this.scale.on('resize', this.adattaZoom, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.adattaZoom, this));
 
-    // comandi
-    this.tasti = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,E,SPACE,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE');
+    this.tasti = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,E,C,SPACE,ESC,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE');
     this.input.keyboard.on('keydown-E', () => this.azione());
     this.input.keyboard.on('keydown-SPACE', () => this.colpisci());
+    this.input.keyboard.on('keydown-C', () => this.apriMenu(!this.menuAperto));
+    this.input.keyboard.on('keydown-ESC', () => this.apriMenu(false));
     ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'].forEach((k, i) => {
-      this.input.keyboard.on('keydown-' + k, () => this.usaSlot(i));
+      this.input.keyboard.on('keydown-' + k, () => (this.menuAperto ? this.costruisci(RICETTE[i] && RICETTE[i].id) : this.usaSlot(i)));
     });
     this.input.on('pointerdown', (p) => {
-      if (this.sys.game.device.input.touch) return; // su touch si usa il pulsante
-      if (p.y > this.scale.height - 80) return; // barra inventario
+      if (this.sys.game.device.input.touch || this.menuAperto) return;
+      if (p.y > this.scale.height - 80) return;
       this.colpisci();
     });
-    this.joy = { x: 0, y: 0 }; // impostato dalla scena Interfaccia
+    this.joy = { x: 0, y: 0 };
 
     this.scene.launch('Interfaccia', { gioco: this });
-    this.messaggio('Sei sull\'Atollo del Campanile. Trova acqua e cibo.');
 
     this.time.addEvent({ delay: 40000, loop: true, callback: () => {
-      if (this.raccoglitore.acqua < 3) this.raccoglitore.acqua++;
+      for (const o of this.interattivi) if (o.tipo === 'raccoglitore' && o.acqua < 3) o.acqua++;
     } });
     this.time.addEvent({ delay: 15000, loop: true, callback: () => this.generaGranchio() });
     this.time.addEvent({ delay: 30000, loop: true, callback: () => this.generaLegna() });
+    this.time.addEvent({ delay: 2500, loop: true, callback: () => this.consigli() });
+
+    if (this.intro) this.risveglio();
+    else this.messaggio('Sei sull\'Atollo del Campanile. Non hai niente: fruga tra i resti della zattera.');
+  }
+
+  // il sopravvissuto si risveglia sdraiato sulla spiaggia
+  risveglio() {
+    const g = this.giocatore;
+    this.bloccato = true;
+    g.setAngle(-90).setTint(0xc8b8a8);
+    this.cameras.main.fadeIn(2500, 0, 0, 0);
+    this.time.delayedCall(1800, () => this.messaggio('Ti risvegli su un atollo sconosciuto.'));
+    this.time.delayedCall(3200, () => {
+      this.tweens.add({ targets: g, angle: 0, duration: 900, ease: 'Back.out', onComplete: () => {
+        g.clearTint(); this.bloccato = false;
+        this.messaggio('Il mare ha portato a riva i resti della zattera. Frugali (E).');
+      } });
+    });
+  }
+
+  consiglio(id, testo, cond) {
+    if (this.consigliDati.has(id) || !cond) return;
+    this.consigliDati.add(id);
+    this.messaggio(testo);
+  }
+
+  consigli() {
+    if (this.bloccato || this.stato.morto) return;
+    const inv = this.stato.inv, S = this.stato;
+    const ha = (t) => this.interattivi.some((o) => o.tipo === t);
+    this.consiglio('falo', 'Con 3 legna puoi costruire un falò (C).', (inv.legna || 0) >= 3 && !ha('fuoco'));
+    this.consiglio('acqua', 'Hai sete. I cocchi delle palme dissetano; un raccoglitore di pioggia ti darà acqua.', S.sete < 55);
+    this.consiglio('racc', 'Con 2 rottami e 1 corda costruisci un raccoglitore di pioggia (C).', (inv.rottame || 0) >= 2 && (inv.corda || 0) >= 1 && !ha('raccoglitore'));
+    this.consiglio('pesca', 'Fame? Entra in acqua bassa vicino a riva e pesca (E).', S.fame < 50);
+    this.consiglio('baracca', 'La notte arriva: con una baracca puoi dormire al sicuro.', S.ora > 0.45 && !ha('baracca'));
+    this.consiglio('zattera', 'Per raggiungere le altre isole serve una zattera: 8 legna, 4 corde, 3 rottami.', ha('baracca') && !this.zattera);
   }
 
   adattaZoom() {
@@ -173,7 +338,6 @@ class Gioco extends Phaser.Scene {
     return true;
   }
 
-  // punto di terra vicino a (x, y) entro una distanza relativa dal centro dell'isola
   cercaTerra(x, y) {
     if (this.mondo.terra(x, y) && this.libero(x, y, 14)) return { x, y };
     for (let d = 16; d < 600; d += 16) {
@@ -200,49 +364,54 @@ class Gioco extends Phaser.Scene {
     return null;
   }
 
+  // punto di spiaggia vicino all'approdo (per i resti del naufragio)
+  puntoRelitto(raggio) {
+    const M = this.mondo, a0 = this.approdo;
+    for (let i = 0; i < 400; i++) {
+      const a = this.rng() * Math.PI * 2, d = 40 + this.rng() * 230;
+      const x = a0.x + Math.cos(a) * d * 1.4, y = a0.y + Math.sin(a) * d * 0.7;
+      const f = M.campo(x, y);
+      if (!M.terra(x, y) || f > 0.45 || !this.libero(x, y, raggio)) continue;
+      if (Math.hypot(x - a0.x, y - a0.y) < 50) continue;
+      return { x, y };
+    }
+    return null;
+  }
+
   sprite(x, y, chiave, oy = 1) {
     return this.add.image(x, y, chiave).setOrigin(0.5, oy).setDepth(y);
   }
 
-  solido(x, y, r) { this.ostacoli.push({ x, y, r }); }
+  solido(x, y, r) { const o = { x, y, r }; this.ostacoli.push(o); return o; }
 
   piazzaMondo() {
-    const M = this.mondo, isole = M.isole;
-    const atollo = isole[0];
+    const isole = this.mondo.isole;
 
-    // accampamento al centro dell'atollo
-    const c = this.cercaTerra(atollo.x - 40, atollo.y - 80);
-    this.sprite(c.x, c.y + 40, 'baracca');
-    this.solido(c.x - 10, c.y + 15, 50); this.solido(c.x + 35, c.y + 20, 30);
-    const fuoco = this.sprite(c.x + 20, c.y + 115, 'falo', 0.7);
-    this.solido(c.x + 20, c.y + 108, 16);
-    this.tweens.add({ targets: fuoco, scaleY: 1.04, yoyo: true, repeat: -1, duration: 260 });
-    this.interattivi.push({ tipo: 'fuoco', x: c.x + 20, y: c.y + 108, r: 50 });
-    const rc = this.sprite(c.x + 115, c.y + 70, 'raccoglitore');
-    this.solido(c.x + 125, c.y + 62, 14);
-    this.raccoglitore = { tipo: 'raccoglitore', x: c.x + 125, y: c.y + 62, r: 48, acqua: 2, sprite: rc };
-    this.interattivi.push(this.raccoglitore);
-
-    // casse e barili da frugare
-    const contenitori = [['cassa', 4], ['barile', 4]];
-    for (const [k, n] of contenitori) {
+    // resti del naufragio sulla spiaggia di approdo
+    const relitto = [
+      ['cassa', 'contenitore', 3], ['barile', 'contenitore', 3],
+      ['rottami', 'rottame', 5], ['corda', 'corda', 2], ['legna', 'legna', 3], ['rete', 'rete', 2],
+    ];
+    for (const [k, tipo, n] of relitto) {
       for (let i = 0; i < n; i++) {
-        const isola = i === 0 ? atollo : isole[1 + (i % 3)];
-        const p = this.puntoCasuale(isola, 0.18, 0.9, 30, 'terra');
+        const p = this.puntoRelitto(18);
         if (!p) continue;
-        const s = this.sprite(p.x, p.y, k);
-        this.solido(p.x, p.y - 6, 14);
-        this.interattivi.push({ tipo: 'contenitore', x: p.x, y: p.y - 6, r: 40, sprite: s, pieno: true });
+        if (tipo === 'contenitore') this.creaContenitore(k, p);
+        else this.creaRaccoglibile(k, tipo, p);
       }
     }
 
-    // decorazioni dell'atollo e delle isole
+    // casse e barili sulle altre isole
+    for (let i = 0; i < 6; i++) {
+      const p = this.puntoCasuale(isole[1 + (i % 3)], 0.18, 0.9, 30, 'terra');
+      if (p) this.creaContenitore(i % 2 ? 'barile' : 'cassa', p);
+    }
+
     const deco = [
       ['roccia_grande', 5, 0.3, 0.95, 40, true], ['roccia', 10, 0.15, 0.95, 22, true],
       ['palma', 9, 0.15, 0.7, 26, true], ['albero_morto', 4, 0.3, 0.9, 22, true],
       ['erba', 30, 0.14, 0.9, 10, false], ['cespuglio', 14, 0.2, 0.9, 16, false],
       ['ossa', 4, 0.15, 0.6, 18, false], ['pneumatico', 4, 0.13, 0.4, 16, false],
-      ['rete', 4, 0.12, 0.3, 16, false],
     ];
     for (const [k, n, minF, maxF, r, blocca] of deco) {
       for (let i = 0; i < n; i++) {
@@ -250,7 +419,7 @@ class Gioco extends Phaser.Scene {
         const p = this.puntoCasuale(isola, minF, maxF, r, 'terra');
         if (!p) continue;
         const s = this.sprite(p.x, p.y, k);
-        if (k === 'erba' || k === 'cespuglio' || k === 'rete' || k === 'ossa') s.setDepth(p.y - 30);
+        if (k === 'erba' || k === 'cespuglio' || k === 'ossa') s.setDepth(p.y - 30);
         if (blocca) this.solido(p.x, p.y - 6, k === 'palma' || k === 'albero_morto' ? 10 : r * 0.8);
         if (k === 'palma') this.interattivi.push({ tipo: 'palma', x: p.x, y: p.y - 6, r: 44, cocchi: 2, sprite: s });
         if (k === 'erba' || k === 'cespuglio' || k === 'palma') {
@@ -259,19 +428,12 @@ class Gioco extends Phaser.Scene {
       }
     }
 
-    // risorse da raccogliere
-    for (let i = 0; i < 8; i++) this.generaLegna(true);
-    const risorse = [['rottami', 'rottame', 5], ['corda', 'corda', 3]];
-    for (const [k, ogg, n] of risorse) {
-      for (let i = 0; i < n; i++) {
-        const p = this.puntoCasuale(isole[i % 4], 0.13, 0.8, 16, 'terra');
-        if (!p) continue;
-        const s = this.sprite(p.x, p.y, k).setDepth(p.y - 20);
-        this.interattivi.push({ tipo: 'raccogli', ogg, x: p.x, y: p.y - 8, r: 36, sprite: s });
-      }
+    for (let i = 0; i < 6; i++) this.generaLegna(true);
+    for (let i = 0; i < 6; i++) {
+      const p = this.puntoCasuale(isole[1 + (i % 3)], 0.13, 0.8, 16, 'terra');
+      if (p) this.creaRaccoglibile(i % 2 ? 'corda' : 'rottami', i % 2 ? 'corda' : 'rottame', p);
     }
 
-    // rovine sui banchi sommersi
     const rovine = [['campanile', isole[4], 70], ['archi', isole[4], 90], ['palazzo', isole[5], 70],
       ['muro', isole[5], 60], ['muro', isole[6], 60], ['archi', isole[6], 90], ['palazzo', isole[4], 70]];
     for (const [k, isola, r] of rovine) {
@@ -281,22 +443,22 @@ class Gioco extends Phaser.Scene {
       this.solido(p.x, p.y - r * 0.4, r * 0.75);
     }
     for (let i = 0; i < 26; i++) {
-      const isola = isole[4 + (i % 3)];
-      const p = this.puntoCasuale(isola, -0.34, 0.11, 10, 'acqua');
+      const p = this.puntoCasuale(isole[4 + (i % 3)], -0.34, 0.11, 10, 'acqua');
       if (p) this.sprite(p.x, p.y, i % 2 ? 'corallo' : 'alghe').setDepth(p.y - 40).setAlpha(0.85);
     }
 
-    // zattera ormeggiata a sud dell'atollo
-    let zp = null;
-    for (let y = atollo.y + 150; y < atollo.y + 700 && !zp; y += 8) {
-      if (M.tipo(atollo.x, y) === TERRENO.BASSO && this.zatteraSta(atollo.x, y + 40)) zp = { x: atollo.x, y: y + 40 };
-    }
-    zp = zp || { x: atollo.x, y: atollo.y + 450 };
-    this.zattera = this.add.image(zp.x, zp.y, 'zattera').setOrigin(0.5, 0.75).setDepth(zp.y);
-    this.zattera.rx = zp.x; this.zattera.ry = zp.y;
-    this.tweens.add({ targets: this.zattera, angle: { from: -1, to: 1 }, yoyo: true, repeat: -1, duration: 2200, ease: 'Sine.inOut' });
+    for (let i = 0; i < 4; i++) this.generaGranchio(true);
+  }
 
-    for (let i = 0; i < 5; i++) this.generaGranchio(true);
+  creaContenitore(k, p) {
+    const s = this.sprite(p.x, p.y, k);
+    const solido = this.solido(p.x, p.y - 6, 12);
+    this.interattivi.push({ tipo: 'contenitore', chiave: k, x: p.x, y: p.y - 6, r: 40, sprite: s, pieno: true, solido });
+  }
+
+  creaRaccoglibile(k, ogg, p) {
+    const s = this.sprite(p.x, p.y, k).setDepth(p.y - 20);
+    this.interattivi.push({ tipo: 'raccogli', ogg, x: p.x, y: p.y - 8, r: 36, sprite: s });
   }
 
   zatteraSta(x, y) {
@@ -310,31 +472,42 @@ class Gioco extends Phaser.Scene {
   generaLegna(iniziale) {
     const n = this.interattivi.filter((o) => o.tipo === 'raccogli' && o.ogg === 'legna').length;
     if (n >= 12) return;
-    const isola = this.mondo.isole[Math.floor(this.rng() * 4)];
-    const p = this.puntoCasuale(isola, 0.12, 0.3, 16, 'terra'); // sulla riva: la porta il mare
+    const isola = this.mondo.isole[iniziale ? Math.floor(this.rng() * 4) : (this.rng() < 0.6 ? 0 : Math.floor(this.rng() * 4))];
+    const p = this.puntoCasuale(isola, 0.12, 0.3, 16, 'terra');
     if (!p) return;
-    const s = this.sprite(p.x, p.y, 'legna').setDepth(p.y - 20);
-    this.interattivi.push({ tipo: 'raccogli', ogg: 'legna', x: p.x, y: p.y - 8, r: 36, sprite: s });
-    if (!iniziale) { s.setAlpha(0); this.tweens.add({ targets: s, alpha: 1, duration: 1200 }); }
+    this.creaRaccoglibile('legna', 'legna', p);
+    if (!iniziale) {
+      const s = this.interattivi[this.interattivi.length - 1].sprite;
+      s.setAlpha(0); this.tweens.add({ targets: s, alpha: 1, duration: 1200 });
+    }
   }
 
   generaGranchio(iniziale) {
-    const notte = this.eNotte();
-    const max = notte ? 12 : 7;
+    const max = this.eNotte() ? 12 : 6;
     if (this.granchi.length >= max) return;
     const isola = this.mondo.isole[Math.floor(this.rng() * 4)];
     const p = this.puntoCasuale(isola, 0.1, 0.5, 14, 'terra');
     if (!p) return;
-    if (!iniziale && this.giocatore && Math.hypot(p.x - this.giocatore.x, p.y - this.giocatore.y) < 300) return;
+    const lontano = (q) => Math.hypot(p.x - q.x, p.y - q.y) > (iniziale ? 380 : 300);
+    if (!lontano(this.giocatore || this.approdo)) return;
     const s = this.add.image(p.x, p.y, 'granchio_giu').setOrigin(0.5, 0.9);
     this.granchi.push({ s, x: p.x, y: p.y, vita: 4, dir: 'giu', meta: null, attesa: 0, carica: 0, pausa: 0, colpito: 0 });
   }
 
   eNotte() { return this.stato.ora > 0.62 && this.stato.ora < 0.97; }
 
-  // ---------------------------------------------------------- movimento
+  // ---------------------------------------------------------- acqua e movimento
+  // terra, guado (si tocca il fondo), nuoto, largo (mare aperto: pericoloso)
+  ambiente(x, y) {
+    const M = this.mondo, t = M.tipo(x, y);
+    if (t === TERRENO.SABBIA || t === TERRENO.ROCCIA) return 'terra';
+    if (t === TERRENO.PROFONDO) return 'largo';
+    return M.campo(x, y) > 0 ? 'guado' : 'nuoto';
+  }
+
   puoStare(x, y) {
-    if (!this.mondo.aPiedi(x, y) || !this.mondo.aPiedi(x - 8, y) || !this.mondo.aPiedi(x + 8, y)) return false;
+    const M = this.mondo;
+    if (x < 20 || y < 20 || x > M.L - 20 || y > M.A - 20) return false;
     return this.libero(x, y, 8);
   }
 
@@ -343,23 +516,32 @@ class Gioco extends Phaser.Scene {
     const S = this.stato;
     if (S.morto) return;
 
-    // tempo e bisogni
     S.ora += dt / DURATA_GIORNO;
     if (S.ora >= 1) { S.ora -= 1; S.giorno++; this.messaggio(`Alba del giorno ${S.giorno}.`); }
+    const amb = this.suZattera ? 'zattera' : this.ambiente(this.giocatore.x, this.giocatore.y);
     const caldo = this.eNotte() ? 0.7 : (S.ora > 0.25 && S.ora < 0.5 ? 1.35 : 1);
-    S.sete = clamp(S.sete - dt * (100 / 330) * caldo, 0, 100);
-    S.fame = clamp(S.fame - dt * (100 / 560), 0, 100);
+    const fatica = amb === 'nuoto' || amb === 'largo' ? 1.5 : 1;
+    if (!this.bloccato) {
+      S.sete = clamp(S.sete - dt * (100 / 330) * caldo * fatica, 0, 100);
+      S.fame = clamp(S.fame - dt * (100 / 560) * fatica, 0, 100);
+    }
     if (S.sete <= 0) S.salute -= dt * 1.2;
     if (S.fame <= 0) S.salute -= dt * 0.6;
-    if (S.sete > 40 && S.fame > 40) S.salute += dt * 0.15;
+    if (amb === 'largo') {
+      S.salute -= dt * 4;
+      if (this.time.now - this.avvisoLargo > 5000) { this.avvisoLargo = this.time.now; this.messaggio('Le correnti del largo ti trascinano: torna verso riva!'); }
+    }
+    if (S.sete > 40 && S.fame > 40 && amb !== 'largo') S.salute += dt * 0.15;
     S.salute = clamp(S.salute, 0, 100);
-    if (S.salute <= 0) return this.morte();
+    if (S.salute <= 0) return this.morte(amb === 'largo' ? 'annegato' : null);
 
-    // direzione dai tasti o dal joystick
     const k = this.tasti;
-    let vx = (k.D.isDown || k.RIGHT.isDown ? 1 : 0) - (k.A.isDown || k.LEFT.isDown ? 1 : 0);
-    let vy = (k.S.isDown || k.DOWN.isDown ? 1 : 0) - (k.W.isDown || k.UP.isDown ? 1 : 0);
-    if (this.joy.x || this.joy.y) { vx = this.joy.x; vy = this.joy.y; }
+    let vx = 0, vy = 0;
+    if (!this.bloccato && !this.menuAperto) {
+      vx = (k.D.isDown || k.RIGHT.isDown ? 1 : 0) - (k.A.isDown || k.LEFT.isDown ? 1 : 0);
+      vy = (k.S.isDown || k.DOWN.isDown ? 1 : 0) - (k.W.isDown || k.UP.isDown ? 1 : 0);
+      if (this.joy.x || this.joy.y) { vx = this.joy.x; vy = this.joy.y; }
+    }
     const len = Math.hypot(vx, vy);
     if (len > 1) { vx /= len; vy /= len; }
     const muove = len > 0.15;
@@ -374,26 +556,32 @@ class Gioco extends Phaser.Scene {
   }
 
   muoviGiocatore(vx, vy, dt, muove) {
-    const g = this.giocatore, M = this.mondo;
-    const inAcqua = M.tipo(g.x, g.y) === TERRENO.BASSO;
-    const vel = (inAcqua ? 70 : 125) * dt;
+    const g = this.giocatore;
+    if (this.bloccato) return;
+    const amb = this.ambiente(g.x, g.y);
+    const vel = { terra: 125, guado: 75, nuoto: 52, largo: 45 }[amb] * dt;
     if (muove) {
       const nx = g.x + vx * vel, ny = g.y + vy * vel;
       if (this.puoStare(nx, g.y)) g.x = nx;
       if (this.puoStare(g.x, ny)) g.y = ny;
       if (Math.abs(vx) > Math.abs(vy)) this.dir = vx > 0 ? 'dx' : 'sx';
       else this.dir = vy > 0 ? 'giu' : 'su';
-      this.passo += dt * (inAcqua ? 7 : 11);
+      this.passo += dt * (amb === 'terra' ? 11 : 6);
     } else this.passo = 0;
     g.setTexture('sopr_' + this.dir);
-    // passo: piccolo saltello e oscillazione
-    const salto = muove ? Math.abs(Math.sin(this.passo)) * 2.5 : 0;
-    g.setDisplayOrigin(g.width / 2, g.height + salto);
-    g.angle = muove ? Math.sin(this.passo) * 3 : 0;
-    // in acqua bassa si vede solo la parte alta
-    if (inAcqua) g.setCrop(0, 0, g.width, g.height * 0.72); else g.setCrop();
+    const inAcqua = amb !== 'terra';
+    const nuota = amb === 'nuoto' || amb === 'largo';
+    // in acqua si vede solo la parte che emerge; nuotando si galleggia
+    const salto = muove && !inAcqua ? Math.abs(Math.sin(this.passo)) * 2.5 : 0;
+    const galleggia = nuota ? Math.sin(this.time.now / 300) * 1.5 : 0;
+    const quota = nuota ? 0.4 : amb === 'guado' ? 0.6 : 1;
+    if (quota < 1) g.setCrop(0, 0, g.width, g.height * quota); else g.setCrop();
+    // con il ritaglio, spostiamo l'origine perche' la parte visibile stia sul pelo dell'acqua
+    g.setDisplayOrigin(g.width / 2, g.height * quota + salto + galleggia);
+    g.angle = muove ? Math.sin(this.passo) * (nuota ? 6 : 3) : 0;
     g.setDepth(g.y);
     this.ombra.setPosition(g.x, g.y - 1).setVisible(!inAcqua).setDepth(g.y - 1);
+    this.increspatura.setPosition(g.x, g.y).setVisible(inAcqua).setDepth(g.y + 1);
   }
 
   muoviZattera(vx, vy, dt, muove) {
@@ -407,6 +595,94 @@ class Gioco extends Phaser.Scene {
     }
     z.setPosition(z.rx, z.ry).setDepth(z.ry);
     g.setPosition(z.rx + (z.flipX ? -48 : 48), z.ry - 4).setDepth(z.ry + 1);
+    this.increspatura.setVisible(false);
+  }
+
+  // ---------------------------------------------------------- costruzione
+  puoPermettersi(r) {
+    return Object.entries(r.costo).every(([k, n]) => (this.stato.inv[k] || 0) >= n);
+  }
+
+  apriMenu(aperto) {
+    if (this.stato.morto || this.bloccato) return;
+    if (aperto && this.suZattera) { this.messaggio('Non puoi costruire sulla zattera.'); return; }
+    this.menuAperto = aperto;
+    this.joy.x = 0; this.joy.y = 0;
+  }
+
+  costruisci(id) {
+    const r = RICETTE.find((x) => x.id === id);
+    if (!r) return;
+    if (!this.puoPermettersi(r)) { this.messaggio(`Per ${r.nome.toLowerCase()} servono: ${costoTesto(r.costo)}.`); return; }
+    const g = this.giocatore;
+    let p = null;
+    if (r.oggetto) {
+      p = true;
+    } else if (r.id === 'zattera') {
+      if (this.zattera) { this.messaggio('Hai già una zattera.'); return; }
+      p = this.puntoZatteraVicino();
+      if (!p) { this.messaggio('Avvicinati alla riva per varare la zattera.'); return; }
+    } else {
+      if (this.ambiente(g.x, g.y) !== 'terra') { this.messaggio('Devi essere sulla terraferma per costruire.'); return; }
+      const dist = r.id === 'baracca' ? 95 : 55;
+      const off = { giu: [0, dist], su: [0, -dist * 0.6], sx: [-dist, 0], dx: [dist, 0] }[this.dir];
+      const raggio = r.id === 'baracca' ? 55 : 18;
+      const cand = [[g.x + off[0], g.y + off[1]], [g.x, g.y + dist], [g.x + dist, g.y], [g.x - dist, g.y], [g.x, g.y - dist * 0.6]];
+      for (const [x, y] of cand) {
+        const ok = this.mondo.terra(x, y) && this.mondo.terra(x - raggio, y) && this.mondo.terra(x + raggio, y) &&
+          this.libero(x, y, raggio) && Math.hypot(x - g.x, y - g.y) > raggio + 8;
+        if (ok) { p = { x, y }; break; }
+      }
+      if (!p) { this.messaggio('Non c\'è abbastanza spazio libero qui intorno.'); return; }
+    }
+    for (const [k, n] of Object.entries(r.costo)) this.stato.inv[k] -= n;
+    this.menuAperto = false;
+    if (r.oggetto) { this.aggiungi(r.id); this.messaggio(`Hai costruito: ${r.nome.toLowerCase()}.`); return; }
+    this.creaCostruzione(r.id, p);
+    this.messaggio(`Hai costruito: ${r.nome.toLowerCase()}.`);
+  }
+
+  puntoZatteraVicino() {
+    const g = this.giocatore;
+    for (let d = 40; d <= 220; d += 12) {
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 12) {
+        const x = g.x + Math.cos(a) * d, y = g.y + Math.sin(a) * d;
+        if (this.zatteraSta(x, y) && this.libero(x, y, 30)) return { x, y };
+      }
+    }
+    return null;
+  }
+
+  creaCostruzione(id, p) {
+    let s;
+    switch (id) {
+      case 'falo':
+        s = this.sprite(p.x, p.y + 10, 'falo', 0.7);
+        this.solido(p.x, p.y + 4, 16);
+        this.interattivi.push({ tipo: 'fuoco', x: p.x, y: p.y + 4, r: 50, sprite: s });
+        break;
+      case 'raccoglitore':
+        s = this.sprite(p.x, p.y + 20, 'raccoglitore');
+        this.solido(p.x + 10, p.y + 12, 14);
+        this.interattivi.push({ tipo: 'raccoglitore', x: p.x + 10, y: p.y + 12, r: 48, acqua: 1, sprite: s });
+        break;
+      case 'baracca':
+        s = this.sprite(p.x, p.y + 45, 'baracca');
+        this.solido(p.x - 10, p.y + 18, 48); this.solido(p.x + 35, p.y + 25, 28);
+        this.interattivi.push({ tipo: 'baracca', x: p.x, y: p.y + 55, r: 70, sprite: s });
+        break;
+      case 'zattera':
+        this.zattera = this.add.image(p.x, p.y, 'zattera').setOrigin(0.5, 0.75).setDepth(p.y);
+        this.zattera.rx = p.x; this.zattera.ry = p.y;
+        s = this.zattera;
+        break;
+    }
+    // compare "montandosi" dal basso
+    s.setScale(1, 0.1).setAlpha(0.3);
+    this.tweens.add({ targets: s, scaleY: 1, alpha: 1, duration: 450, ease: 'Back.out', onComplete: () => {
+      if (id === 'falo') this.tweens.add({ targets: s, scaleY: 1.04, yoyo: true, repeat: -1, duration: 260 });
+      if (id === 'zattera') this.tweens.add({ targets: s, angle: { from: -1, to: 1 }, yoyo: true, repeat: -1, duration: 2200, ease: 'Sine.inOut' });
+    } });
   }
 
   // ---------------------------------------------------------- azioni
@@ -414,56 +690,64 @@ class Gioco extends Phaser.Scene {
     const g = this.giocatore;
     let migliore = null, dmin = Infinity;
     for (const o of this.interattivi) {
-      if (o.tipo === 'raccogli' && o.preso) continue;
       const d = Math.hypot(o.x - g.x, o.y - g.y);
       if (d < o.r && d < dmin) { dmin = d; migliore = o; }
     }
     return migliore;
   }
 
-  // testo del suggerimento per l'azione E
+  vicinoZattera() {
+    const z = this.zattera, g = this.giocatore;
+    return z && Math.hypot(z.rx - g.x, z.ry - g.y) < 120;
+  }
+
   suggerimento() {
-    if (this.stato.morto) return '';
+    if (this.stato.morto || this.bloccato || this.menuAperto) return '';
     const inv = this.stato.inv;
     if (this.pesca) return 'Stai pescando...';
-    if (this.suZattera) {
-      return this.puntoSbarco() ? 'E: scendi a terra · E lontano dalla riva: pesca' : 'E: pesca dalla zattera';
-    }
+    if (this.suZattera) return this.puntoSbarco() ? 'E: scendi a terra' : 'E: pesca dalla zattera';
     const o = this.vicino();
     if (o) {
       switch (o.tipo) {
-        case 'raccoglitore': return o.acqua > 0 ? `E: bevi acqua piovana (${o.acqua})` : 'Raccoglitore vuoto: piove ogni tanto';
+        case 'raccoglitore': return o.acqua > 0 ? `E: bevi acqua piovana (${o.acqua})` : 'Raccoglitore vuoto: si riempie con la pioggia';
         case 'fuoco': {
           const crudo = inv.pesce ? 'pesce' : inv.carne ? 'polpa di granchio' : null;
           if (!crudo) return 'Falò: porta pesce o granchio da cucinare';
           return inv.legna ? `E: cucina ${crudo} (usa 1 legna)` : 'Serve 1 legna per cucinare';
         }
+        case 'baracca': return this.puoDormire() ? "E: dormi fino all'alba" : 'Baracca: potrai dormire al tramonto';
         case 'palma': return o.cocchi > 0 ? 'E: raccogli un cocco' : 'Palma senza cocchi';
-        case 'contenitore': return o.pieno ? 'E: fruga' : 'Vuoto';
-        case 'raccogli': return 'E: raccogli ' + OGGETTI[o.ogg].nome.toLowerCase();
+        case 'contenitore': return o.pieno ? 'E: fruga' : (o.chiave === 'barile' ? 'E: smonta per ricavare rottami' : 'E: smonta per ricavare legna');
+        case 'raccogli': return o.ogg === 'rete' ? 'E: recupera la corda dalla rete' : 'E: raccogli ' + OGGETTI[o.ogg].nome.toLowerCase();
       }
     }
-    const g = this.giocatore;
-    if (Math.hypot(this.zattera.rx - g.x, this.zattera.ry - g.y) < 120) return 'E: sali sulla zattera';
-    if (this.mondo.tipo(g.x, g.y) === TERRENO.BASSO) return 'E: pesca';
+    if (this.vicinoZattera()) return 'E: sali sulla zattera';
+    if (this.ambiente(this.giocatore.x, this.giocatore.y) === 'guado') return 'E: pesca';
     return '';
   }
+
+  puoDormire() { const o = this.stato.ora; return o > 0.5 || o < 0.02; }
 
   aggiungi(ogg, n = 1) {
     const inv = this.stato.inv;
     inv[ogg] = (inv[ogg] || 0) + n;
   }
 
+  rimuovi(o) {
+    const i = this.interattivi.indexOf(o);
+    if (i >= 0) this.interattivi.splice(i, 1);
+    if (o.solido) this.ostacoli.splice(this.ostacoli.indexOf(o.solido), 1);
+    this.tweens.add({ targets: o.sprite, alpha: 0, y: o.sprite.y - 12, duration: 250, onComplete: () => o.sprite.destroy() });
+  }
+
   azione() {
-    if (this.stato.morto) return;
+    if (this.stato.morto || this.bloccato || this.menuAperto || this.pesca) return;
     const g = this.giocatore, inv = this.stato.inv;
-    if (this.pesca) return;
     if (this.suZattera) {
       const p = this.puntoSbarco();
       if (p) {
         this.suZattera = false;
         g.setPosition(p.x, p.y).setAngle(0);
-        this.ombra.setVisible(true);
         this.messaggio('Sei sceso a terra.');
       } else this.iniziaPesca(true);
       return;
@@ -482,27 +766,38 @@ class Gioco extends Phaser.Scene {
           }
           return;
         }
+        case 'baracca':
+          if (this.puoDormire()) this.dormi();
+          return;
         case 'palma':
-          if (o.cocchi > 0) { o.cocchi--; o.ricresce = o.ricresce || 0; this.aggiungi('cocco'); this.messaggio('Hai raccolto un cocco.'); }
+          if (o.cocchi > 0) { o.cocchi--; this.aggiungi('cocco'); this.messaggio('Hai raccolto un cocco.'); }
           return;
         case 'contenitore':
           if (o.pieno) {
             o.pieno = false; o.sprite.setTint(0x9a8f80);
             const r = this.rng();
-            const ogg = !inv.coltello && r < 0.3 ? 'coltello' : r < 0.6 ? 'acqua' : r < 0.85 ? 'benda' : 'corda';
+            const ogg = o.chiave === 'barile'
+              ? (r < 0.45 ? 'acqua' : r < 0.75 ? 'corda' : 'rottame')
+              : (r < 0.35 ? 'benda' : r < 0.6 ? 'acqua' : r < 0.85 ? 'corda' : 'rottame');
             this.aggiungi(ogg);
-            this.messaggio('Hai trovato: ' + OGGETTI[ogg].nome.toLowerCase() + (ogg === 'coltello' ? ' (colpi più forti)' : ''));
+            this.messaggio('Hai trovato: ' + OGGETTI[ogg].nome.toLowerCase());
+          } else {
+            this.aggiungi(o.chiave === 'barile' ? 'rottame' : 'legna', 2);
+            this.messaggio(o.chiave === 'barile' ? 'Hai smontato il barile: +2 rottame' : 'Hai smontato la cassa: +2 legna');
+            this.rimuovi(o);
           }
           return;
-        case 'raccogli':
-          o.preso = true; this.aggiungi(o.ogg);
-          this.tweens.add({ targets: o.sprite, alpha: 0, y: o.sprite.y - 12, duration: 250, onComplete: () => o.sprite.destroy() });
-          this.interattivi.splice(this.interattivi.indexOf(o), 1);
-          this.messaggio('+1 ' + OGGETTI[o.ogg].nome.toLowerCase());
+        case 'raccogli': {
+          const quanti = o.ogg === 'rete' || o.ogg === 'rottame' ? 2 : 1;
+          const ogg = o.ogg === 'rete' ? 'corda' : o.ogg;
+          this.aggiungi(ogg, quanti);
+          this.messaggio(`+${quanti} ${OGGETTI[ogg].nome.toLowerCase()}`);
+          this.rimuovi(o);
           return;
+        }
       }
     }
-    if (Math.hypot(this.zattera.rx - g.x, this.zattera.ry - g.y) < 120) {
+    if (this.vicinoZattera()) {
       this.suZattera = true;
       this.ombra.setVisible(false);
       g.setCrop(); g.setTexture('sopr_giu'); g.angle = 0; this.dir = 'giu';
@@ -510,7 +805,24 @@ class Gioco extends Phaser.Scene {
       this.messaggio('Sei sulla zattera. Puoi andare anche in mare aperto.');
       return;
     }
-    if (this.mondo.tipo(g.x, g.y) === TERRENO.BASSO) this.iniziaPesca(false);
+    if (this.ambiente(g.x, g.y) === 'guado') this.iniziaPesca(false);
+  }
+
+  dormi() {
+    this.bloccato = true;
+    const cam = this.cameras.main;
+    cam.fadeOut(900, 0, 0, 0);
+    cam.once('camerafadeoutcomplete', () => {
+      const S = this.stato;
+      if (S.ora > 0.5) S.giorno++;
+      S.ora = 0.03;
+      S.sete = clamp(S.sete - 20, 0, 100); S.fame = clamp(S.fame - 15, 0, 100); S.salute = clamp(S.salute + 25, 0, 100);
+      // i granchi notturni tornano in mare
+      for (const c of this.granchi.splice(4)) c.s.destroy();
+      this.messaggio(`Hai dormito fino all'alba del giorno ${S.giorno}.`);
+      cam.fadeIn(1200, 0, 0, 0);
+      this.bloccato = false;
+    });
   }
 
   puntoSbarco() {
@@ -535,7 +847,7 @@ class Gioco extends Phaser.Scene {
     this.pesca.tempo += dt;
     if (this.pesca.tempo >= this.pesca.durata) {
       this.pesca = null;
-      if (this.rng() < 0.8) { this.aggiungi('pesce'); this.messaggio('Hai preso un pesce!'); }
+      if (this.rng() < 0.75) { this.aggiungi('pesce'); this.messaggio('Hai preso un pesce!'); }
       else this.messaggio('Il pesce è scappato.');
     }
   }
@@ -549,14 +861,13 @@ class Gioco extends Phaser.Scene {
   }
 
   colpisci() {
-    if (this.stato.morto || this.suZattera) return;
+    if (this.stato.morto || this.suZattera || this.bloccato || this.menuAperto) return;
     const ora = this.time.now;
     if (ora - this.ultimoColpo < 400) return;
     this.ultimoColpo = ora;
     const g = this.giocatore;
     const off = { giu: [0, 18], su: [0, -30], sx: [-24, -10], dx: [24, -10] }[this.dir];
     const cx = g.x + off[0], cy = g.y + off[1];
-    // effetto del colpo
     const arco = this.add.arc(cx, cy - 10, 16, 0, 360, false, 0xffffff, 0.35).setDepth(99999);
     this.tweens.add({ targets: arco, scale: 1.6, alpha: 0, duration: 180, onComplete: () => arco.destroy() });
     const danno = this.stato.inv.coltello ? 2 : 1;
@@ -586,16 +897,18 @@ class Gioco extends Phaser.Scene {
 
   aggiornaGranchi(dt) {
     const g = this.giocatore, M = this.mondo;
+    const ambG = this.ambiente(g.x, g.y);
+    const raggiungibile = !this.suZattera && !this.bloccato && (ambG === 'terra' || ambG === 'guado');
     for (const c of this.granchi) {
       const dx = g.x - c.x, dy = g.y - c.y, d = Math.hypot(dx, dy);
       c.colpito = Math.max(0, c.colpito - dt);
       c.pausa = Math.max(0, c.pausa - dt);
-      const caccia = !this.suZattera && d < (this.eNotte() ? 200 : 130);
+      const caccia = raggiungibile && d < (this.eNotte() ? 200 : 130);
       let vx = 0, vy = 0;
       if (c.carica > 0) {
         c.carica -= dt;
         if (c.carica <= 0) {
-          if (d < 38 && !this.suZattera) {
+          if (d < 38 && raggiungibile) {
             this.stato.salute = clamp(this.stato.salute - 9, 0, 100);
             this.cameras.main.shake(120, 0.004);
             g.setTint(0xff7777); this.time.delayedCall(150, () => g.clearTint());
@@ -605,7 +918,7 @@ class Gioco extends Phaser.Scene {
       } else if (c.pausa > 0) {
         // fermo dopo un colpo
       } else if (caccia) {
-        if (d < 30 && c.attesa <= 0) { c.carica = 0.45; }
+        if (d < 30 && c.attesa <= 0) c.carica = 0.45;
         else if (d > 24) { vx = dx / d; vy = dy / d; }
       } else {
         if (!c.meta || c.attesaMeta <= 0) {
@@ -619,7 +932,6 @@ class Gioco extends Phaser.Scene {
       c.attesa = Math.max(0, c.attesa - dt);
       const vel = 62 * dt;
       const nx = c.x + vx * vel, ny = c.y + vy * vel;
-      // i granchi stanno sulla terra e sulla riva
       const ok = (x, y) => M.tipo(x, y) !== TERRENO.PROFONDO && M.campo(x, y) > -0.1 && this.libero(x, y, 8);
       if (ok(nx, c.y)) c.x = nx; else if (c.meta) c.attesaMeta = 0;
       if (ok(c.x, ny)) c.y = ny; else if (c.meta) c.attesaMeta = 0;
@@ -643,8 +955,9 @@ class Gioco extends Phaser.Scene {
 
   usa(k) {
     const S = this.stato, o = OGGETTI[k];
-    if (S.morto || !o.uso || !(S.inv[k] > 0)) {
-      if (o && !o.uso) this.messaggio(o.nome + ': servirà per costruire (prossime versioni).');
+    if (S.morto || !(S.inv[k] > 0)) return;
+    if (!o.uso) {
+      this.messaggio(k === 'coltello' ? 'Il coltello è sempre in mano: colpi doppi.' : o.nome + ': serve per costruire (C).');
       return;
     }
     S.inv[k]--;
@@ -654,10 +967,12 @@ class Gioco extends Phaser.Scene {
     this.messaggio(t);
   }
 
-  morte() {
+  morte(motivo) {
     const S = this.stato;
     S.morto = true;
-    const causa = S.sete <= 0 ? 'Sei morto di sete' : S.fame <= 0 ? 'Sei morto di fame' : 'Sei morto per le ferite';
+    this.menuAperto = false;
+    const causa = motivo === 'annegato' ? 'Sei annegato al largo'
+      : S.sete <= 0 ? 'Sei morto di sete' : S.fame <= 0 ? 'Sei morto di fame' : 'Sei morto per le ferite';
     this.giocatore.setTint(0x777777).setAngle(90);
     this.time.delayedCall(900, () => {
       this.scene.stop('Interfaccia');
@@ -674,42 +989,71 @@ class Interfaccia extends Phaser.Scene {
   create() {
     this.buio = this.add.rectangle(0, 0, 10, 10, 0x0a1430, 0).setOrigin(0);
     this.g = this.add.graphics();
-    const stile = { fontFamily: 'monospace', fontSize: '13px', color: '#ffffff', stroke: '#000000', strokeThickness: 3 };
+    const stile = { fontFamily: FONT, fontSize: '13px', color: '#ffffff', stroke: '#000000', strokeThickness: 3 };
+    this.stile = stile;
     this.icone = ['ic_goccia', 'ic_cibo', 'ic_benda'].map((k) => this.add.image(0, 0, k).setScale(0.7));
     this.etichette = ['Sete', 'Fame', 'Salute'].map((t) => this.add.text(0, 0, t, stile));
     this.testoGiorno = this.add.text(0, 0, '', { ...stile, fontSize: '15px' }).setOrigin(1, 0);
     this.testoVersione = this.add.text(0, 0, 'Mare Alto ' + VERSIONE, { ...stile, fontSize: '11px', color: '#e8a24f' }).setOrigin(1, 0);
     this.sole = this.add.image(0, 0, 'ic_sole').setScale(0.7);
     this.prompt = this.add.text(0, 0, '', { ...stile, fontSize: '15px', backgroundColor: '#00000088', padding: { x: 8, y: 4 } }).setOrigin(0.5, 1);
-    this.log = this.add.text(0, 0, '', { ...stile, fontSize: '12px', lineSpacing: 2 });
+    this.log = this.add.text(0, 0, '', { ...stile, fontSize: '12px', lineSpacing: 2, wordWrap: { width: 360 } });
     this.slot = [];
     for (let i = 0; i < 10; i++) {
       const box = this.add.rectangle(0, 0, 44, 44, 0x12303f, 0.85).setStrokeStyle(1, 0x6aa8c0).setInteractive();
       const ic = this.add.image(0, 0, 'ic_cocco');
       const n = this.add.text(0, 0, '', { ...stile, fontSize: '12px' }).setOrigin(1, 1);
       const tasto = this.add.text(0, 0, '', { ...stile, fontSize: '10px', color: '#bcd' });
-      box.on('pointerdown', (p, lx, ly, ev) => { ev.stopPropagation(); this.gioco.usaSlot(i); });
+      box.on('pointerdown', (p, lx, ly, ev) => { ev.stopPropagation(); if (!this.gioco.menuAperto) this.gioco.usaSlot(i); });
       this.slot.push({ box, ic, n, tasto });
     }
+    this.creaMenu();
     this.touch = this.sys.game.device.input.touch;
     if (this.touch) this.creaComandiTouch();
+    else {
+      this.btnCostruisci = this.add.text(0, 0, 'C: costruisci', { ...stile, fontSize: '13px', backgroundColor: '#5a3a1a', padding: { x: 8, y: 5 } })
+        .setOrigin(1, 1).setInteractive({ useHandCursor: true });
+      this.btnCostruisci.on('pointerdown', (p, lx, ly, ev) => { ev.stopPropagation(); this.gioco.apriMenu(!this.gioco.menuAperto); });
+    }
     this.disponi();
     this.scale.on('resize', this.disponi, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.disponi, this));
   }
 
+  creaMenu() {
+    this.menu = this.add.container(0, 0).setVisible(false).setDepth(10);
+    this.menuFondo = this.add.rectangle(0, 0, 10, 10, 0x0b1d26, 0.94).setOrigin(0).setStrokeStyle(2, 0xc8a060);
+    this.menuTitolo = this.add.text(0, 0, 'Costruisci', { ...this.stile, fontSize: '18px', color: '#f0e2b6' });
+    this.menuChiudi = this.add.text(0, 0, '✕', { ...this.stile, fontSize: '20px' }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
+    this.menuChiudi.on('pointerdown', () => this.gioco.apriMenu(false));
+    this.menu.add([this.menuFondo, this.menuTitolo, this.menuChiudi]);
+    this.righe = RICETTE.map((r, i) => {
+      const fondo = this.add.rectangle(0, 0, 400, 62, 0x163848, 0.9).setOrigin(0).setInteractive({ useHandCursor: true });
+      const nome = this.add.text(0, 0, `${i + 1}. ${r.nome}`, { ...this.stile, fontSize: '15px' });
+      const cosa = this.add.text(0, 0, r.cosa, { ...this.stile, fontSize: '11px', color: '#9fc3d0' });
+      const costo = this.add.text(0, 0, '', { ...this.stile, fontSize: '12px', align: 'right' }).setOrigin(1, 0);
+      fondo.on('pointerdown', () => this.gioco.costruisci(r.id));
+      this.menu.add([fondo, nome, cosa, costo]);
+      return { r, fondo, nome, cosa, costo };
+    });
+  }
+
   creaComandiTouch() {
     this.joyBase = this.add.circle(0, 0, 56, 0xffffff, 0.12).setStrokeStyle(2, 0xffffff, 0.35);
     this.joyPomo = this.add.circle(0, 0, 24, 0xffffff, 0.35);
-    this.btnAzione = this.add.circle(0, 0, 34, 0x2f8fbf, 0.75).setInteractive();
-    this.btnAzioneT = this.add.text(0, 0, 'AZIONE', { fontFamily: 'monospace', fontSize: '11px', color: '#fff' }).setOrigin(0.5);
-    this.btnColpo = this.add.circle(0, 0, 28, 0xbf5a2f, 0.75).setInteractive();
-    this.btnColpoT = this.add.text(0, 0, 'COLPISCI', { fontFamily: 'monospace', fontSize: '10px', color: '#fff' }).setOrigin(0.5);
-    this.btnAzione.on('pointerdown', () => this.gioco.azione());
-    this.btnColpo.on('pointerdown', () => this.gioco.colpisci());
+    const bottone = (col, r, testo, fn) => {
+      const c = this.add.circle(0, 0, r, col, 0.78).setInteractive();
+      const t = this.add.text(0, 0, testo, { fontFamily: FONT, fontSize: testo.length > 8 ? '9px' : '10px', color: '#fff' }).setOrigin(0.5);
+      c.on('pointerdown', (p, lx, ly, ev) => { ev.stopPropagation(); fn(); });
+      return { c, t };
+    };
+    this.btnAzione = bottone(0x2f8fbf, 34, 'AZIONE', () => this.gioco.azione());
+    this.btnColpo = bottone(0xbf5a2f, 28, 'COLPISCI', () => this.gioco.colpisci());
+    this.btnCostr = bottone(0x8a6a2a, 32, 'COSTRUISCI', () => this.gioco.apriMenu(!this.gioco.menuAperto));
     this.joyId = null;
     this.input.addPointer(2);
     this.input.on('pointerdown', (p) => {
+      if (this.gioco.menuAperto) return;
       if (p.x < this.scale.width * 0.45 && p.y > this.scale.height * 0.35 && this.joyId === null) {
         this.joyId = p.id; this.joyBase.setPosition(p.x, p.y); this.joyPomo.setPosition(p.x, p.y);
       }
@@ -738,22 +1082,37 @@ class Interfaccia extends Phaser.Scene {
     this.etichette.forEach((t, i) => t.setPosition(36, 14 + i * 24));
     this.testoGiorno.setPosition(w - 12, 10);
     this.testoVersione.setPosition(w - 12, 32);
-    this.sole.setPosition(w - 12 - 120, 20);
-    this.log.setPosition(12, 92);
-    this.prompt.setPosition(w / 2, h - 64);
+    this.log.setPosition(12, 92).setWordWrapWidth(Math.min(w - 24, 420));
     this.ySlot = h - 30;
     if (this.touch) {
-      this.joyBase.setPosition(90, h - 120); this.joyPomo.setPosition(90, h - 120);
-      this.btnAzione.setPosition(w - 60, h - 130); this.btnAzioneT.setPosition(w - 60, h - 130);
-      this.btnColpo.setPosition(w - 130, h - 90); this.btnColpoT.setPosition(w - 130, h - 90);
+      this.joyBase.setPosition(90, h - 140); this.joyPomo.setPosition(90, h - 140);
+      const pos = (b, x, y) => { b.c.setPosition(x, y); b.t.setPosition(x, y); };
+      pos(this.btnAzione, w - 58, h - 150);
+      pos(this.btnColpo, w - 130, h - 108);
+      pos(this.btnCostr, w - 52, h - 232);
+    } else {
+      this.btnCostruisci.setPosition(w - 12, h - 10);
     }
+    // menu di costruzione al centro
+    const mw = Math.min(w - 24, 460), mh = 56 + RICETTE.length * 68;
+    this.menu.setPosition(Math.round((w - mw) / 2), Math.round(Math.max(8, (h - mh) / 2 - 20)));
+    this.menuFondo.setSize(mw, mh);
+    this.menuTitolo.setPosition(14, 12);
+    this.menuChiudi.setPosition(mw - 12, 8);
+    this.righe.forEach((r, i) => {
+      const y = 46 + i * 68;
+      r.fondo.setPosition(8, y).setSize(mw - 16, 62);
+      r.fondo.input.hitArea.setTo(0, 0, mw - 16, 62);
+      r.nome.setPosition(16, y + 8);
+      r.cosa.setPosition(16, y + 34);
+      r.costo.setPosition(mw - 18, y + 6);
+    });
   }
 
   update() {
     const G = this.gioco, S = G.stato;
     if (!S) return;
     const w = this.scale.width, h = this.scale.height;
-    // barre
     this.g.clear();
     const valori = [[S.sete, 0x4fb3e8], [S.fame, 0xe8a24f], [S.salute, 0xd9534f]];
     valori.forEach(([v, col], i) => {
@@ -761,18 +1120,15 @@ class Interfaccia extends Phaser.Scene {
       this.g.fillStyle(0x0b1d26, 0.8).fillRect(94, y - 13, 104, 10);
       this.g.fillStyle(v < 20 ? 0xff3333 : col, 1).fillRect(96, y - 11, v, 6);
     });
-    // ora del giorno
     const notte = G.eNotte();
     this.testoGiorno.setText(`Giorno ${S.giorno} · ${notte ? 'notte' : S.ora < 0.12 ? 'alba' : S.ora > 0.52 ? 'tramonto' : 'giorno'}`);
     this.sole.setPosition(w - 12 - this.testoGiorno.width - 16, 20).setAlpha(notte ? 0.3 : 1);
-    // buio: cresce al tramonto, cala all'alba
     const o = S.ora;
     let a = 0;
     if (o > 0.52 && o < 0.66) a = (o - 0.52) / 0.14;
     else if (o >= 0.66 && o < 0.9) a = 1;
     else if (o >= 0.9) a = 1 - (o - 0.9) / 0.1;
     this.buio.setFillStyle(o > 0.52 && o < 0.62 ? 0x3a1a30 : 0x0a1430, a * 0.55);
-    // suggerimento
     const s = G.suggerimento();
     this.prompt.setText(s).setVisible(!!s);
     if (G.pesca) {
@@ -780,10 +1136,8 @@ class Interfaccia extends Phaser.Scene {
       this.g.fillStyle(0x000000, 0.6).fillRect(w / 2 - 60, h - 100, 120, 8);
       this.g.fillStyle(0x4fb3e8, 1).fillRect(w / 2 - 59, h - 99, 118 * p, 6);
     }
-    // messaggi recenti
-    S.messaggi = S.messaggi.filter((m) => G.time.now - m.tempo < 6000);
+    S.messaggi = S.messaggi.filter((m) => G.time.now - m.tempo < 7000);
     this.log.setText(S.messaggi.map((m) => m.testo).join('\n'));
-    // inventario
     const voci = G.slotVisibili();
     const lato = 46, tot = voci.length * lato;
     const x0 = w / 2 - tot / 2 + lato / 2;
@@ -801,6 +1155,17 @@ class Interfaccia extends Phaser.Scene {
       sl.n.setText(String(S.inv[k])).setPosition(x + 20, y + 21);
       sl.tasto.setText(String(i + 1)).setPosition(x - 19, y - 21);
     });
+    // menu costruzione
+    this.menu.setVisible(G.menuAperto);
+    if (G.menuAperto) {
+      for (const r of this.righe) {
+        const ok = G.puoPermettersi(r.r);
+        const giaZattera = r.r.id === 'zattera' && G.zattera;
+        r.fondo.setFillStyle(ok && !giaZattera ? 0x1f5a3a : 0x163848, 0.9);
+        r.costo.setText(giaZattera ? 'già costruita' : Object.entries(r.r.costo).map(([k, n]) => `${S.inv[k] || 0}/${n} ${OGGETTI[k].nome.toLowerCase()}`).join('\n'));
+        r.costo.setColor(ok && !giaZattera ? '#9be89b' : '#e8a0a0');
+      }
+    }
   }
 }
 
@@ -811,11 +1176,11 @@ class Fine extends Phaser.Scene {
   create() {
     const w = this.scale.width, h = this.scale.height;
     this.add.rectangle(0, 0, w, h, 0x05080c, 0.85).setOrigin(0);
-    this.add.text(w / 2, h * 0.38, this.dati.causa, { fontFamily: 'monospace', fontSize: '30px', color: '#e8a24f' }).setOrigin(0.5);
+    this.add.text(w / 2, h * 0.38, this.dati.causa, { fontFamily: FONT, fontSize: w < 600 ? '22px' : '30px', color: '#e8a24f' }).setOrigin(0.5);
     const g = this.dati.giorni;
-    this.add.text(w / 2, h * 0.5, `Sei sopravvissuto ${g} ${g === 1 ? 'giorno' : 'giorni'} sul Mare Alto.`, { fontFamily: 'monospace', fontSize: '16px', color: '#d8e6ea' }).setOrigin(0.5);
-    this.add.text(w / 2, h * 0.64, 'Tocca o premi INVIO per ricominciare', { fontFamily: 'monospace', fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
-    const di = () => { this.scene.stop('Gioco'); this.scene.start('Gioco'); };
+    this.add.text(w / 2, h * 0.5, `Sei sopravvissuto ${g} ${g === 1 ? 'giorno' : 'giorni'} sul Mare Alto.`, { fontFamily: FONT, fontSize: '16px', color: '#d8e6ea', align: 'center', wordWrap: { width: w - 40 } }).setOrigin(0.5);
+    this.add.text(w / 2, h * 0.64, 'Tocca o premi INVIO per ricominciare', { fontFamily: FONT, fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
+    const di = () => { this.scene.start('Gioco', { intro: false }); };
     this.time.delayedCall(600, () => {
       this.input.keyboard.once('keydown-ENTER', di);
       this.input.once('pointerdown', di);
@@ -833,6 +1198,6 @@ window.addEventListener('load', () => {
     pixelArt: true,
     scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
     input: { activePointers: 3 },
-    scene: [Avvio, Titolo, Gioco, Interfaccia, Fine],
+    scene: [Avvio, Titolo, Naufragio, Gioco, Interfaccia, Fine],
   });
 });

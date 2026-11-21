@@ -1,6 +1,6 @@
 # GPverse — Mare Alto
 
-**Versione: V0.1.0** — primo prototipo giocabile.
+**Versione: V0.2.0** — prototipo giocabile: naufragio e costruzione.
 
 Mare Alto è un survival open world senza storia prefissata. Scegli un sopravvissuto in un'Italia sommersa e ridisegnata, 400 anni nel futuro, e fai quello che vuoi: navigare, commerciare, esplorare le città sommerse, fondare un villaggio o comandare una flotta.
 
@@ -28,20 +28,22 @@ Poi apri `http://localhost:8000`. Su Windows usa `py -m http.server 8000`. Aprir
 | Comando | Tastiera | Telefono |
 | --- | --- | --- |
 | Muoversi | WASD o frecce | Joystick a sinistra |
-| Azione: raccogliere, bere, cucinare, salire sulla zattera, pescare | E | AZIONE |
+| Azione: raccogliere, frugare, bere, cucinare, dormire, pescare | E | AZIONE |
+| Costruire | C | COSTRUISCI |
 | Colpire | Spazio o clic | COLPISCI |
 | Usare un oggetto | 1–9 | Tocca l'oggetto in basso |
 
-## Cosa c'è nella V0.1.0
+## Cosa c'è nella V0.2.0
 
+- Animazione iniziale: la tempesta spezza la tua zattera e ti risvegli su un atollo sconosciuto, senza niente. Si può saltare.
+- Sulla spiaggia ci sono i resti del naufragio: casse e barili da frugare (e poi smontare), rottami, corde, reti, legna.
+- Costruzione (C o COSTRUISCI): falò, raccoglitore di pioggia, coltello, baracca, zattera.
+- Acqua realistica: vicino a riva cammini nell'acqua, più in là nuoti lento e ti stanchi, in mare aperto le correnti ti fanno annegare. Per il largo serve la zattera.
+- La baracca permette di dormire fino all'alba e recuperare salute.
+- Suggerimenti che compaiono man mano, senza una storia obbligata.
+- Sete, fame e salute; caldo a mezzogiorno; giorno e notte di 4 minuti; granchi più numerosi di notte.
+- Pesca in acqua bassa o dalla zattera, cottura al falò (1 legna per pasto).
 - Un arcipelago generato da un seme: l'Atollo del Campanile, tre isole più piccole e tre banchi sommersi con le rovine.
-- Sete, fame e salute. Il caldo di mezzogiorno fa venire più sete.
-- Ciclo giorno/notte di 4 minuti. Di notte i granchi sono di più e più aggressivi.
-- Raccoglitore di acqua piovana, palme da cocco, casse e barili da frugare, legna portata dal mare.
-- Pesca dall'acqua bassa o dalla zattera (in acqua profonda si pesca più in fretta).
-- Cottura al falò: 1 legna per ogni pasto. Mangiare crudo può farti stare male.
-- Granchi giganti da combattere. Il coltello, se lo trovi, raddoppia il danno.
-- Zattera per navigare anche in mare aperto.
 
 ## Struttura
 
