@@ -1,6 +1,6 @@
 # GPverse — Mare Alto
 
-**Versione: V0.2.0** — prototipo giocabile: naufragio e costruzione.
+**Versione: V0.3.0** — prototipo giocabile: naufragio, costruzione, immersioni e salvataggi.
 
 Mare Alto è un survival open world senza storia prefissata. Scegli un sopravvissuto in un'Italia sommersa e ridisegnata, 400 anni nel futuro, e fai quello che vuoi: navigare, commerciare, esplorare le città sommerse, fondare un villaggio o comandare una flotta.
 
@@ -17,7 +17,9 @@ Il documento di design completo è su Claude: *GPverse — Mare Alto · Game Des
 
 ## Come giocare
 
-Il gioco gira nel browser, su PC e su telefono. Dalla cartella del repo avvia un piccolo server:
+Online, da PC e telefono: **https://galimbertip.github.io/MareAlto/** (GitHub Pages, ramo `main`). Ogni push su `main` aggiorna il gioco in un paio di minuti.
+
+In locale, dalla cartella del repo avvia un piccolo server:
 
 ```
 python3 -m http.server 8000
@@ -33,12 +35,23 @@ Poi apri `http://localhost:8000`. Su Windows usa `py -m http.server 8000`. Aprir
 | Colpire | Spazio o clic | COLPISCI |
 | Usare un oggetto | 1–9 | Tocca l'oggetto in basso |
 
-## Cosa c'è nella V0.2.0
+## Salvataggi
+
+- Il gioco salva da solo ogni 15 secondi, dopo ogni costruzione, quando dormi e quando chiudi o metti in secondo piano la pagina.
+- Il salvataggio resta nel browser del dispositivo: PC e telefono hanno ognuno il suo.
+- Per spostare una partita usa **Codice di salvataggio** nella schermata iniziale: copi il codice su un dispositivo, lo incolli sull'altro e premi Carica.
+- Se muori, il salvataggio viene cancellato.
+
+## Cosa c'è nella V0.3.0
+
+- Immersioni: in mare cammini finché tocchi il fondo, poi vai sott'acqua. Compare la barra dell'ossigeno (circa 22 secondi d'aria); quando finisce anneghi. Risalendo dove si tocca, l'aria torna in fretta.
+- Salvataggio automatico, Continua / Nuova partita, codice di salvataggio per passare da PC a telefono.
+
+## Cosa c'era nella V0.2.0
 
 - Animazione iniziale: la tempesta spezza la tua zattera e ti risvegli su un atollo sconosciuto, senza niente. Si può saltare.
 - Sulla spiaggia ci sono i resti del naufragio: casse e barili da frugare (e poi smontare), rottami, corde, reti, legna.
 - Costruzione (C o COSTRUISCI): falò, raccoglitore di pioggia, coltello, baracca, zattera.
-- Acqua realistica: vicino a riva cammini nell'acqua, più in là nuoti lento e ti stanchi, in mare aperto le correnti ti fanno annegare. Per il largo serve la zattera.
 - La baracca permette di dormire fino all'alba e recuperare salute.
 - Suggerimenti che compaiono man mano, senza una storia obbligata.
 - Sete, fame e salute; caldo a mezzogiorno; giorno e notte di 4 minuti; granchi più numerosi di notte.

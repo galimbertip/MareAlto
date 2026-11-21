@@ -1,7 +1,9 @@
 // GPverse — Mare Alto · prototipo giocabile
 'use strict';
 
-const VERSIONE = 'V0.2.0';
+const VERSIONE = 'V0.3.0';
+const CHIAVE_SALVATAGGIO = 'mareAlto.salvataggio';
+const OSSIGENO_SECONDI = 22; // quanto si resiste sott'acqua
 const DURATA_GIORNO = 240; // secondi per un giorno completo
 
 const OGGETTI = {
@@ -38,6 +40,54 @@ const SPRITE = ['sopr_giu', 'sopr_su', 'sopr_sx', 'sopr_dx', 'baracca', 'zattera
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const FONT = 'monospace';
 const costoTesto = (c) => Object.entries(c).map(([k, n]) => `${n} ${OGGETTI[k].nome.toLowerCase()}`).join(', ');
+
+// ---------------------------------------------------------------- Salvataggi
+// Il salvataggio vive nel browser (localStorage) di ogni dispositivo.
+// Per passare da PC a telefono si usa il "codice di salvataggio".
+function leggiSalvataggio() {
+  try { const t = localStorage.getItem(CHIAVE_SALVATAGGIO); return t ? JSON.parse(t) : null; } catch (e) { return null; }
+}
+function scriviSalvataggio(d) {
+  try { localStorage.setItem(CHIAVE_SALVATAGGIO, JSON.stringify(d)); return true; } catch (e) { return false; }
+}
+function cancellaSalvataggio() { try { localStorage.removeItem(CHIAVE_SALVATAGGIO); } catch (e) { /* niente */ } }
+function codiceDa(d) { return 'MAREALTO1:' + btoa(unescape(encodeURIComponent(JSON.stringify(d)))); }
+function datiDa(codice) {
+  const t = (codice || '').trim();
+  if (!t.startsWith('MAREALTO1:')) return null;
+  try {
+    const d = JSON.parse(decodeURIComponent(escape(atob(t.slice(10)))));
+    return d && d.stato && d.pos ? d : null;
+  } catch (e) { return null; }
+}
+
+// Pannello HTML per esportare/importare il codice (sopra il canvas del gioco)
+function apriPannello(game, alCaricamento) {
+  const el = document.getElementById('pannello');
+  const area = document.getElementById('codice');
+  const esito = document.getElementById('esito');
+  const d = leggiSalvataggio();
+  area.value = d ? codiceDa(d) : '';
+  esito.textContent = d ? `Partita al giorno ${d.stato.giorno}. Copia il codice e incollalo sull'altro dispositivo.` : 'Nessuna partita salvata su questo dispositivo. Puoi incollare qui un codice.';
+  el.hidden = false;
+  game.input.keyboard.enabled = false;
+  game.input.keyboard.clearCaptures();
+  const chiudi = () => { el.hidden = true; game.input.keyboard.enabled = true; };
+  document.getElementById('btnChiudi').onclick = chiudi;
+  document.getElementById('btnCopia').onclick = async () => {
+    area.select();
+    try { await navigator.clipboard.writeText(area.value); esito.textContent = 'Codice copiato.'; }
+    catch (e) { esito.textContent = 'Seleziona il testo e copialo a mano.'; }
+  };
+  document.getElementById('btnCarica').onclick = () => {
+    const nuovi = datiDa(area.value);
+    if (!nuovi) { esito.textContent = 'Codice non valido: deve iniziare con MAREALTO1:'; return; }
+    scriviSalvataggio(nuovi);
+    esito.textContent = `Caricata la partita del giorno ${nuovi.stato.giorno}.`;
+    chiudi();
+    alCaricamento();
+  };
+}
 
 // ---------------------------------------------------------------- Caricamento
 class Avvio extends Phaser.Scene {
@@ -77,17 +127,47 @@ class Titolo extends Phaser.Scene {
       this.add.text(w / 2, h * 0.61, comandi, {
         fontFamily: FONT, fontSize: piccolo ? '12px' : '15px', color: '#d8e6ea', align: 'center', lineSpacing: 6,
       }).setOrigin(0.5);
-      const invito = this.add.text(w / 2, h * 0.87, touch ? 'Tocca per iniziare' : 'Premi INVIO o clicca per iniziare', {
-        fontFamily: FONT, fontSize: piccolo ? '16px' : '20px', color: '#ffffff',
-      }).setOrigin(0.5);
-      this.tweens.add({ targets: invito, alpha: 0.3, yoyo: true, repeat: -1, duration: 700 });
+      const salvato = leggiSalvataggio();
+      const bottone = (y, testo, col, fn) => {
+        const b = this.add.text(w / 2, y, testo, {
+          fontFamily: FONT, fontSize: piccolo ? '16px' : '19px', color: '#ffffff', backgroundColor: col, padding: { x: 16, y: 8 },
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        b.on('pointerdown', fn);
+        return b;
+      };
+      let y = h * 0.8;
+      if (salvato) {
+        bottone(y, `Continua · giorno ${salvato.stato.giorno}`, '#1f6a4a', () => this.continua());
+        y += piccolo ? 46 : 52;
+      }
+      bottone(y, 'Nuova partita', '#2f5f8a', () => this.nuova());
+      this.add.text(w / 2, Math.min(h - 16, y + (piccolo ? 40 : 46)), 'Codice di salvataggio (PC ⇄ telefono)', {
+        fontFamily: FONT, fontSize: '13px', color: '#bfe3f0', backgroundColor: '#00000066', padding: { x: 8, y: 4 },
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => apriPannello(this.game, () => this.scene.restart()));
+      if (!touch) this.add.text(w / 2, h - 8, salvato ? 'INVIO: continua' : 'INVIO: nuova partita', { fontFamily: FONT, fontSize: '12px', color: '#9fb8c4' }).setOrigin(0.5, 1);
     };
     disegna();
     this.scale.on('resize', disegna, this);
     this.events.once('shutdown', () => this.scale.off('resize', disegna, this));
-    const parti = () => { this.scene.start('Naufragio'); };
-    this.input.keyboard.once('keydown-ENTER', parti);
-    this.input.once('pointerdown', parti);
+    this.input.keyboard.on('keydown-ENTER', () => (leggiSalvataggio() ? this.continua() : this.nuova()));
+  }
+
+  continua() { this.scene.start('Gioco', { carica: true }); }
+
+  nuova() {
+    const salvato = leggiSalvataggio();
+    if (salvato && !this.conferma) {
+      this.conferma = true;
+      const w = this.scale.width, h = this.scale.height;
+      const t = this.add.text(w / 2, h * 0.72, 'La partita salvata verrà persa. Tocca di nuovo "Nuova partita".', {
+        fontFamily: FONT, fontSize: '13px', color: '#ffd28a', backgroundColor: '#000000aa', padding: { x: 8, y: 4 }, align: 'center', wordWrap: { width: w - 30 },
+      }).setOrigin(0.5);
+      this.time.delayedCall(3500, () => { t.destroy(); this.conferma = false; });
+      return;
+    }
+    cancellaSalvataggio();
+    this.scene.start('Naufragio');
   }
 }
 
@@ -199,7 +279,10 @@ class Naufragio extends Phaser.Scene {
 // ---------------------------------------------------------------- Gioco
 class Gioco extends Phaser.Scene {
   constructor() { super('Gioco'); }
-  init(dati) { this.intro = !!(dati && dati.intro); }
+  init(dati) {
+    this.intro = !!(dati && dati.intro);
+    this.salvataggio = dati && dati.carica ? leggiSalvataggio() : null;
+  }
 
   create() {
     this.rng = rngConSeme(20261120);
@@ -221,9 +304,12 @@ class Gioco extends Phaser.Scene {
     this.zattera = null;
     this.menuAperto = false;
     this.consigliDati = new Set();
+    this.prossimoId = 0;
+    this.rimossi = new Set();
+    this.costruiti = [];
 
     this.stato = {
-      sete: 85, fame: 75, salute: 80,
+      sete: 85, fame: 75, salute: 80, ossigeno: 100,
       giorno: 1, ora: 0.03,
       inv: {},
       morto: false,
@@ -284,8 +370,66 @@ class Gioco extends Phaser.Scene {
     this.time.addEvent({ delay: 30000, loop: true, callback: () => this.generaLegna() });
     this.time.addEvent({ delay: 2500, loop: true, callback: () => this.consigli() });
 
-    if (this.intro) this.risveglio();
+    if (this.salvataggio) this.applicaSalvataggio(this.salvataggio);
+    else if (this.intro) this.risveglio();
     else this.messaggio('Sei sull\'Atollo del Campanile. Non hai niente: fruga tra i resti della zattera.');
+
+    // salvataggio automatico
+    this.time.addEvent({ delay: 15000, loop: true, callback: () => this.salva() });
+    const nascosto = () => this.salva();
+    this.game.events.on('hidden', nascosto);
+    window.addEventListener('pagehide', nascosto);
+    this.events.once('shutdown', () => { this.game.events.off('hidden', nascosto); window.removeEventListener('pagehide', nascosto); });
+  }
+
+  salva() {
+    const S = this.stato, g = this.giocatore;
+    if (!g || S.morto || this.bloccato) return;
+    const legnaExtra = this.interattivi.filter((o) => o.id && o.id[0] === 'd').map((o) => ({ x: Math.round(o.sprite.x), y: Math.round(o.sprite.y) }));
+    const aperti = this.interattivi.filter((o) => o.tipo === 'contenitore' && !o.pieno).map((o) => o.id);
+    const cocchi = {};
+    for (const o of this.interattivi) if (o.tipo === 'palma' && o.cocchi < 2) cocchi[o.id] = o.cocchi;
+    scriviSalvataggio({
+      versione: VERSIONE, quando: Date.now(),
+      stato: { sete: S.sete, fame: S.fame, salute: S.salute, ossigeno: S.ossigeno, giorno: S.giorno, ora: S.ora, inv: S.inv },
+      pos: { x: Math.round(g.x), y: Math.round(g.y), dir: this.dir },
+      suZattera: this.suZattera,
+      zattera: this.zattera ? { x: Math.round(this.zattera.rx), y: Math.round(this.zattera.ry) } : null,
+      rimossi: [...this.rimossi], aperti, cocchi, legnaExtra,
+      costruiti: this.costruiti.map((c) => ({ id: c.id, x: c.x, y: c.y, acqua: c.ogg ? c.ogg.acqua : undefined })),
+      consigli: [...this.consigliDati],
+    });
+  }
+
+  applicaSalvataggio(d) {
+    const S = this.stato, g = this.giocatore;
+    Object.assign(S, { sete: d.stato.sete, fame: d.stato.fame, salute: d.stato.salute, ossigeno: d.stato.ossigeno ?? 100,
+      giorno: d.stato.giorno, ora: d.stato.ora, inv: { ...d.stato.inv } });
+    const rimossi = new Set(d.rimossi || []), aperti = new Set(d.aperti || []);
+    for (const o of [...this.interattivi]) {
+      if (rimossi.has(o.id)) {
+        this.rimossi.add(o.id);
+        this.interattivi.splice(this.interattivi.indexOf(o), 1);
+        if (o.solido) this.ostacoli.splice(this.ostacoli.indexOf(o.solido), 1);
+        o.sprite.destroy();
+      } else if (aperti.has(o.id)) { o.pieno = false; o.sprite.setTint(0x9a8f80); }
+      if (d.cocchi && d.cocchi[o.id] !== undefined) o.cocchi = d.cocchi[o.id];
+    }
+    // la legna iniziale non salvata come rimossa resta; quella arrivata dopo viene ricreata
+    for (const p of d.legnaExtra || []) this.creaRaccoglibile('legna', 'legna', { x: p.x, y: p.y }, 'd');
+    for (const c of d.costruiti || []) {
+      if (c.id === 'zattera') continue;
+      const ogg = this.creaCostruzione(c.id, { x: c.x, y: c.y }, true);
+      if (ogg && c.acqua !== undefined) ogg.acqua = c.acqua;
+    }
+    if (d.zattera) this.creaCostruzione('zattera', d.zattera, true);
+    for (const c of d.consigli || []) this.consigliDati.add(c);
+    g.setPosition(d.pos.x, d.pos.y); this.dir = d.pos.dir || 'giu';
+    if (d.suZattera && this.zattera) {
+      this.suZattera = true; this.ombra.setVisible(false);
+    }
+    this.cameras.main.fadeIn(800, 0, 0, 0);
+    this.messaggio(`Partita ripresa: giorno ${S.giorno}.`);
   }
 
   // il sopravvissuto si risveglia sdraiato sulla spiaggia
@@ -421,7 +565,7 @@ class Gioco extends Phaser.Scene {
         const s = this.sprite(p.x, p.y, k);
         if (k === 'erba' || k === 'cespuglio' || k === 'ossa') s.setDepth(p.y - 30);
         if (blocca) this.solido(p.x, p.y - 6, k === 'palma' || k === 'albero_morto' ? 10 : r * 0.8);
-        if (k === 'palma') this.interattivi.push({ tipo: 'palma', x: p.x, y: p.y - 6, r: 44, cocchi: 2, sprite: s });
+        if (k === 'palma') this.interattivi.push({ id: this.nuovoId('i'), tipo: 'palma', x: p.x, y: p.y - 6, r: 44, cocchi: 2, sprite: s });
         if (k === 'erba' || k === 'cespuglio' || k === 'palma') {
           this.tweens.add({ targets: s, angle: { from: -1.5, to: 1.5 }, yoyo: true, repeat: -1, duration: 1800 + this.rng() * 900, ease: 'Sine.inOut' });
         }
@@ -450,15 +594,18 @@ class Gioco extends Phaser.Scene {
     for (let i = 0; i < 4; i++) this.generaGranchio(true);
   }
 
+  nuovoId(pref) { return pref + (this.prossimoId++); }
+
   creaContenitore(k, p) {
     const s = this.sprite(p.x, p.y, k);
     const solido = this.solido(p.x, p.y - 6, 12);
-    this.interattivi.push({ tipo: 'contenitore', chiave: k, x: p.x, y: p.y - 6, r: 40, sprite: s, pieno: true, solido });
+    this.interattivi.push({ id: this.nuovoId('i'), tipo: 'contenitore', chiave: k, x: p.x, y: p.y - 6, r: 40, sprite: s, pieno: true, solido });
   }
 
-  creaRaccoglibile(k, ogg, p) {
+  // pref 'i' = oggetto iniziale del mondo, 'd' = arrivato dopo (legna portata dal mare)
+  creaRaccoglibile(k, ogg, p, pref = 'i') {
     const s = this.sprite(p.x, p.y, k).setDepth(p.y - 20);
-    this.interattivi.push({ tipo: 'raccogli', ogg, x: p.x, y: p.y - 8, r: 36, sprite: s });
+    this.interattivi.push({ id: this.nuovoId(pref), tipo: 'raccogli', ogg, x: p.x, y: p.y - 8, r: 36, sprite: s });
   }
 
   zatteraSta(x, y) {
@@ -475,7 +622,7 @@ class Gioco extends Phaser.Scene {
     const isola = this.mondo.isole[iniziale ? Math.floor(this.rng() * 4) : (this.rng() < 0.6 ? 0 : Math.floor(this.rng() * 4))];
     const p = this.puntoCasuale(isola, 0.12, 0.3, 16, 'terra');
     if (!p) return;
-    this.creaRaccoglibile('legna', 'legna', p);
+    this.creaRaccoglibile('legna', 'legna', p, iniziale ? 'i' : 'd');
     if (!iniziale) {
       const s = this.interattivi[this.interattivi.length - 1].sprite;
       s.setAlpha(0); this.tweens.add({ targets: s, alpha: 1, duration: 1200 });
@@ -497,12 +644,12 @@ class Gioco extends Phaser.Scene {
   eNotte() { return this.stato.ora > 0.62 && this.stato.ora < 0.97; }
 
   // ---------------------------------------------------------- acqua e movimento
-  // terra, guado (si tocca il fondo), nuoto, largo (mare aperto: pericoloso)
+  // terra, guado (si tocca il fondo), sotto (sott'acqua: si consuma ossigeno)
   ambiente(x, y) {
     const M = this.mondo, t = M.tipo(x, y);
     if (t === TERRENO.SABBIA || t === TERRENO.ROCCIA) return 'terra';
-    if (t === TERRENO.PROFONDO) return 'largo';
-    return M.campo(x, y) > 0 ? 'guado' : 'nuoto';
+    if (t === TERRENO.BASSO && M.campo(x, y) > 0) return 'guado';
+    return 'sotto';
   }
 
   puoStare(x, y) {
@@ -520,20 +667,23 @@ class Gioco extends Phaser.Scene {
     if (S.ora >= 1) { S.ora -= 1; S.giorno++; this.messaggio(`Alba del giorno ${S.giorno}.`); }
     const amb = this.suZattera ? 'zattera' : this.ambiente(this.giocatore.x, this.giocatore.y);
     const caldo = this.eNotte() ? 0.7 : (S.ora > 0.25 && S.ora < 0.5 ? 1.35 : 1);
-    const fatica = amb === 'nuoto' || amb === 'largo' ? 1.5 : 1;
+    const fatica = amb === 'sotto' ? 1.3 : 1;
     if (!this.bloccato) {
       S.sete = clamp(S.sete - dt * (100 / 330) * caldo * fatica, 0, 100);
       S.fame = clamp(S.fame - dt * (100 / 560) * fatica, 0, 100);
     }
     if (S.sete <= 0) S.salute -= dt * 1.2;
     if (S.fame <= 0) S.salute -= dt * 0.6;
-    if (amb === 'largo') {
-      S.salute -= dt * 4;
-      if (this.time.now - this.avvisoLargo > 5000) { this.avvisoLargo = this.time.now; this.messaggio('Le correnti del largo ti trascinano: torna verso riva!'); }
-    }
-    if (S.sete > 40 && S.fame > 40 && amb !== 'largo') S.salute += dt * 0.15;
+    if (amb === 'sotto') {
+      S.ossigeno = clamp(S.ossigeno - dt * 100 / OSSIGENO_SECONDI, 0, 100);
+      if (S.ossigeno <= 0) {
+        S.salute -= dt * 8;
+        if (this.time.now - this.avvisoLargo > 4000) { this.avvisoLargo = this.time.now; this.messaggio('Senza aria! Torna dove tocchi il fondo!'); }
+      }
+    } else S.ossigeno = clamp(S.ossigeno + dt * 50, 0, 100);
+    if (S.sete > 40 && S.fame > 40 && amb !== 'sotto') S.salute += dt * 0.15;
     S.salute = clamp(S.salute, 0, 100);
-    if (S.salute <= 0) return this.morte(amb === 'largo' ? 'annegato' : null);
+    if (S.salute <= 0) return this.morte(amb === 'sotto' ? 'annegato' : null);
 
     const k = this.tasti;
     let vx = 0, vy = 0;
@@ -559,7 +709,7 @@ class Gioco extends Phaser.Scene {
     const g = this.giocatore;
     if (this.bloccato) return;
     const amb = this.ambiente(g.x, g.y);
-    const vel = { terra: 125, guado: 75, nuoto: 52, largo: 45 }[amb] * dt;
+    const vel = { terra: 125, guado: 75, sotto: 62 }[amb] * dt;
     if (muove) {
       const nx = g.x + vx * vel, ny = g.y + vy * vel;
       if (this.puoStare(nx, g.y)) g.x = nx;
@@ -569,19 +719,23 @@ class Gioco extends Phaser.Scene {
       this.passo += dt * (amb === 'terra' ? 11 : 6);
     } else this.passo = 0;
     g.setTexture('sopr_' + this.dir);
-    const inAcqua = amb !== 'terra';
-    const nuota = amb === 'nuoto' || amb === 'largo';
-    // in acqua si vede solo la parte che emerge; nuotando si galleggia
-    const salto = muove && !inAcqua ? Math.abs(Math.sin(this.passo)) * 2.5 : 0;
-    const galleggia = nuota ? Math.sin(this.time.now / 300) * 1.5 : 0;
-    const quota = nuota ? 0.4 : amb === 'guado' ? 0.6 : 1;
+    const sotto = amb === 'sotto';
+    const salto = muove && amb === 'terra' ? Math.abs(Math.sin(this.passo)) * 2.5 : 0;
+    const fluttua = sotto ? Math.sin(this.time.now / 350) * 2 : 0;
+    // nel guado si vede solo la parte che emerge; sott'acqua il corpo e' blu e sfocato
+    const quota = amb === 'guado' ? 0.6 : 1;
     if (quota < 1) g.setCrop(0, 0, g.width, g.height * quota); else g.setCrop();
-    // con il ritaglio, spostiamo l'origine perche' la parte visibile stia sul pelo dell'acqua
-    g.setDisplayOrigin(g.width / 2, g.height * quota + salto + galleggia);
-    g.angle = muove ? Math.sin(this.passo) * (nuota ? 6 : 3) : 0;
-    g.setDepth(g.y);
-    this.ombra.setPosition(g.x, g.y - 1).setVisible(!inAcqua).setDepth(g.y - 1);
-    this.increspatura.setPosition(g.x, g.y).setVisible(inAcqua).setDepth(g.y + 1);
+    g.setDisplayOrigin(g.width / 2, g.height * quota + salto + fluttua);
+    g.angle = muove ? Math.sin(this.passo) * (sotto ? 8 : 3) : 0;
+    if (sotto) g.setTint(0x6fa8d0).setAlpha(0.6); else if (!this.ferito) g.clearTint().setAlpha(1);
+    g.setDepth(sotto ? g.y - 45 : g.y);
+    this.ombra.setPosition(g.x, g.y - 1).setVisible(amb === 'terra').setDepth(g.y - 1);
+    this.increspatura.setPosition(g.x, g.y).setVisible(amb === 'guado').setDepth(g.y + 1);
+    if (sotto) {
+      this.tempoBolle = (this.tempoBolle || 0) - dt;
+      if (this.tempoBolle <= 0) { this.tempoBolle = 0.35; this.bolla(g.x + (this.rng() - 0.5) * 14, g.y - 34); }
+      this.consiglio('ossigeno', "Sei sott'acqua: tieni d'occhio la barra dell'ossigeno.", true);
+    }
   }
 
   muoviZattera(vx, vy, dt, muove) {
@@ -596,6 +750,11 @@ class Gioco extends Phaser.Scene {
     z.setPosition(z.rx, z.ry).setDepth(z.ry);
     g.setPosition(z.rx + (z.flipX ? -48 : 48), z.ry - 4).setDepth(z.ry + 1);
     this.increspatura.setVisible(false);
+  }
+
+  bolla(x, y) {
+    const b = this.add.circle(x, y, 2 + this.rng() * 2).setStrokeStyle(1, 0xdff6ff, 0.8).setDepth(y + 60);
+    this.tweens.add({ targets: b, y: y - 30, x: x + (this.rng() - 0.5) * 10, alpha: 0, duration: 900, onComplete: () => b.destroy() });
   }
 
   // ---------------------------------------------------------- costruzione
@@ -640,6 +799,7 @@ class Gioco extends Phaser.Scene {
     if (r.oggetto) { this.aggiungi(r.id); this.messaggio(`Hai costruito: ${r.nome.toLowerCase()}.`); return; }
     this.creaCostruzione(r.id, p);
     this.messaggio(`Hai costruito: ${r.nome.toLowerCase()}.`);
+    this.salva();
   }
 
   puntoZatteraVicino() {
@@ -653,23 +813,23 @@ class Gioco extends Phaser.Scene {
     return null;
   }
 
-  creaCostruzione(id, p) {
-    let s;
+  creaCostruzione(id, p, subito) {
+    let s, ogg = null;
     switch (id) {
       case 'falo':
         s = this.sprite(p.x, p.y + 10, 'falo', 0.7);
         this.solido(p.x, p.y + 4, 16);
-        this.interattivi.push({ tipo: 'fuoco', x: p.x, y: p.y + 4, r: 50, sprite: s });
+        ogg = { tipo: 'fuoco', x: p.x, y: p.y + 4, r: 50, sprite: s };
         break;
       case 'raccoglitore':
         s = this.sprite(p.x, p.y + 20, 'raccoglitore');
         this.solido(p.x + 10, p.y + 12, 14);
-        this.interattivi.push({ tipo: 'raccoglitore', x: p.x + 10, y: p.y + 12, r: 48, acqua: 1, sprite: s });
+        ogg = { tipo: 'raccoglitore', x: p.x + 10, y: p.y + 12, r: 48, acqua: 1, sprite: s };
         break;
       case 'baracca':
         s = this.sprite(p.x, p.y + 45, 'baracca');
         this.solido(p.x - 10, p.y + 18, 48); this.solido(p.x + 35, p.y + 25, 28);
-        this.interattivi.push({ tipo: 'baracca', x: p.x, y: p.y + 55, r: 70, sprite: s });
+        ogg = { tipo: 'baracca', x: p.x, y: p.y + 55, r: 70, sprite: s };
         break;
       case 'zattera':
         this.zattera = this.add.image(p.x, p.y, 'zattera').setOrigin(0.5, 0.75).setDepth(p.y);
@@ -677,12 +837,19 @@ class Gioco extends Phaser.Scene {
         s = this.zattera;
         break;
     }
-    // compare "montandosi" dal basso
-    s.setScale(1, 0.1).setAlpha(0.3);
-    this.tweens.add({ targets: s, scaleY: 1, alpha: 1, duration: 450, ease: 'Back.out', onComplete: () => {
+    if (ogg) this.interattivi.push(ogg);
+    if (id !== 'zattera') this.costruiti.push({ id, x: Math.round(p.x), y: Math.round(p.y), ogg });
+    const anima = () => {
       if (id === 'falo') this.tweens.add({ targets: s, scaleY: 1.04, yoyo: true, repeat: -1, duration: 260 });
       if (id === 'zattera') this.tweens.add({ targets: s, angle: { from: -1, to: 1 }, yoyo: true, repeat: -1, duration: 2200, ease: 'Sine.inOut' });
-    } });
+    };
+    if (subito) anima();
+    else {
+      // compare "montandosi" dal basso
+      s.setScale(1, 0.1).setAlpha(0.3);
+      this.tweens.add({ targets: s, scaleY: 1, alpha: 1, duration: 450, ease: 'Back.out', onComplete: anima });
+    }
+    return ogg;
   }
 
   // ---------------------------------------------------------- azioni
@@ -734,6 +901,7 @@ class Gioco extends Phaser.Scene {
   }
 
   rimuovi(o) {
+    if (o.id && o.id[0] === 'i') this.rimossi.add(o.id);
     const i = this.interattivi.indexOf(o);
     if (i >= 0) this.interattivi.splice(i, 1);
     if (o.solido) this.ostacoli.splice(this.ostacoli.indexOf(o.solido), 1);
@@ -822,6 +990,7 @@ class Gioco extends Phaser.Scene {
       this.messaggio(`Hai dormito fino all'alba del giorno ${S.giorno}.`);
       cam.fadeIn(1200, 0, 0, 0);
       this.bloccato = false;
+      this.salva();
     });
   }
 
@@ -898,6 +1067,7 @@ class Gioco extends Phaser.Scene {
   aggiornaGranchi(dt) {
     const g = this.giocatore, M = this.mondo;
     const ambG = this.ambiente(g.x, g.y);
+    // sott'acqua i granchi non ti raggiungono
     const raggiungibile = !this.suZattera && !this.bloccato && (ambG === 'terra' || ambG === 'guado');
     for (const c of this.granchi) {
       const dx = g.x - c.x, dy = g.y - c.y, d = Math.hypot(dx, dy);
@@ -911,7 +1081,7 @@ class Gioco extends Phaser.Scene {
           if (d < 38 && raggiungibile) {
             this.stato.salute = clamp(this.stato.salute - 9, 0, 100);
             this.cameras.main.shake(120, 0.004);
-            g.setTint(0xff7777); this.time.delayedCall(150, () => g.clearTint());
+            this.ferito = true; g.setTint(0xff7777); this.time.delayedCall(150, () => { this.ferito = false; g.clearTint(); });
           }
           c.attesa = 1.2;
         }
@@ -971,7 +1141,8 @@ class Gioco extends Phaser.Scene {
     const S = this.stato;
     S.morto = true;
     this.menuAperto = false;
-    const causa = motivo === 'annegato' ? 'Sei annegato al largo'
+    cancellaSalvataggio();
+    const causa = motivo === 'annegato' ? 'Sei annegato'
       : S.sete <= 0 ? 'Sei morto di sete' : S.fame <= 0 ? 'Sei morto di fame' : 'Sei morto per le ferite';
     this.giocatore.setTint(0x777777).setAngle(90);
     this.time.delayedCall(900, () => {
@@ -987,12 +1158,14 @@ class Interfaccia extends Phaser.Scene {
   init(dati) { this.gioco = dati.gioco; }
 
   create() {
+    this.velo = this.add.rectangle(0, 0, 10, 10, 0x1a6a9a, 0).setOrigin(0);
     this.buio = this.add.rectangle(0, 0, 10, 10, 0x0a1430, 0).setOrigin(0);
     this.g = this.add.graphics();
     const stile = { fontFamily: FONT, fontSize: '13px', color: '#ffffff', stroke: '#000000', strokeThickness: 3 };
     this.stile = stile;
     this.icone = ['ic_goccia', 'ic_cibo', 'ic_benda'].map((k) => this.add.image(0, 0, k).setScale(0.7));
     this.etichette = ['Sete', 'Fame', 'Salute'].map((t) => this.add.text(0, 0, t, stile));
+    this.etOssigeno = this.add.text(0, 0, 'Ossigeno', { ...stile, color: '#bff0ff' });
     this.testoGiorno = this.add.text(0, 0, '', { ...stile, fontSize: '15px' }).setOrigin(1, 0);
     this.testoVersione = this.add.text(0, 0, 'Mare Alto ' + VERSIONE, { ...stile, fontSize: '11px', color: '#e8a24f' }).setOrigin(1, 0);
     this.sole = this.add.image(0, 0, 'ic_sole').setScale(0.7);
@@ -1078,11 +1251,13 @@ class Interfaccia extends Phaser.Scene {
   disponi() {
     const w = this.scale.width, h = this.scale.height;
     this.buio.setSize(w, h);
+    this.velo.setSize(w, h);
+    this.etOssigeno.setPosition(12, 86);
     this.icone.forEach((ic, i) => ic.setPosition(20, 22 + i * 24));
     this.etichette.forEach((t, i) => t.setPosition(36, 14 + i * 24));
     this.testoGiorno.setPosition(w - 12, 10);
     this.testoVersione.setPosition(w - 12, 32);
-    this.log.setPosition(12, 92).setWordWrapWidth(Math.min(w - 24, 420));
+    this.log.setPosition(12, 112).setWordWrapWidth(Math.min(w - 24, 420));
     this.ySlot = h - 30;
     if (this.touch) {
       this.joyBase.setPosition(90, h - 140); this.joyPomo.setPosition(90, h - 140);
@@ -1120,6 +1295,16 @@ class Interfaccia extends Phaser.Scene {
       this.g.fillStyle(0x0b1d26, 0.8).fillRect(94, y - 13, 104, 10);
       this.g.fillStyle(v < 20 ? 0xff3333 : col, 1).fillRect(96, y - 11, v, 6);
     });
+    // ossigeno: compare solo sott'acqua o mentre si riprende fiato
+    const sotto = !G.suZattera && G.giocatore && G.ambiente(G.giocatore.x, G.giocatore.y) === 'sotto';
+    const mostraOss = sotto || S.ossigeno < 100;
+    this.etOssigeno.setVisible(mostraOss);
+    if (mostraOss) {
+      const lamp = S.ossigeno < 25 && Math.floor(G.time.now / 250) % 2 === 0;
+      this.g.fillStyle(0x0b1d26, 0.8).fillRect(94, 89, 104, 10);
+      this.g.fillStyle(lamp ? 0xff3333 : 0xbff0ff, 1).fillRect(96, 91, S.ossigeno, 6);
+    }
+    this.velo.setAlpha(1).setFillStyle(0x1a6a9a, sotto ? 0.28 : 0);
     const notte = G.eNotte();
     this.testoGiorno.setText(`Giorno ${S.giorno} · ${notte ? 'notte' : S.ora < 0.12 ? 'alba' : S.ora > 0.52 ? 'tramonto' : 'giorno'}`);
     this.sole.setPosition(w - 12 - this.testoGiorno.width - 16, 20).setAlpha(notte ? 0.3 : 1);
